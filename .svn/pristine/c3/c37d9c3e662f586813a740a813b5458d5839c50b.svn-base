@@ -1,0 +1,26 @@
+module EstadoInicial where
+
+import LI11819
+import Typos
+import System.Random (mkStdGen)
+import Tarefa1_2018li1g027 (mapaInicial, editorInicial, instrucao)
+
+estadoI :: Imagens -> EstadoGloss
+estadoI a = EstadoGloss
+            { estado          = Estado {mapaEstado = mapaInicial (6,6), jogadoresEstado = [],disparosEstado = []}
+            , editor          = instrucao Desenha $ editorInicial []
+            , menu            = True
+            , imagens         = a
+            , nJog            = 1
+            , tMenu           = head . imagensMenu $ a
+            , acoesMapa       = []
+            , criaMapa        = False
+            , powerups        = []
+            , powerUpCounter  = 100
+            , rnd             = mkStdGen 5
+            , empty           = []
+            , tickCounter     = 0
+            , windowSize      = (1280,720)
+            , botIndex        = []
+            , winner          = -1
+            }

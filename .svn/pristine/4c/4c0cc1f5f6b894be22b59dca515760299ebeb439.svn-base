@@ -1,0 +1,209 @@
+-- | Este módulo define funções comuns da Tarefa 3 do trabalho prático.
+module Tarefa3_2018li1g027 where
+import Data.List
+import Data.Char
+import LI11819
+import Tarefa1_2018li1g027
+import Tarefa2_2018li1g027
+
+-- * Testes
+
+-- | Testes unitários da Tarefa 3.
+--
+-- Cada teste é um 'Estado'.
+testesT3 :: [Estado]
+testesT3 = [Estado {mapaEstado = [[Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel]], jogadoresEstado = [Jogador {posicaoJogador = (1,1), direcaoJogador = B, vidasJogador = 1, lasersJogador = 1, choquesJogador = 1},Jogador {posicaoJogador = (5,1), direcaoJogador = D, vidasJogador = 1, lasersJogador = 1, choquesJogador = 1},Jogador {posicaoJogador = (1,5), direcaoJogador = C, vidasJogador = 1, lasersJogador = 1, choquesJogador = 1},Jogador {posicaoJogador = (1,1), direcaoJogador = B, vidasJogador = 1, lasersJogador = 1, choquesJogador = 1},Jogador {posicaoJogador = (1,1), direcaoJogador = B, vidasJogador = 1, lasersJogador = 1, choquesJogador = 1}], disparosEstado = [DisparoChoque {jogadorDisparo = 2, tempoDisparo = 5}]}]
+
+
+-- MAPA PARA STRING
+{-
+mapaAsString :: Mapa -> String
+mapaAsString m = removeSpaces $ unwords $ mapaToString m
+
+mapaToString :: Mapa -> [String]
+mapaToString [] = []
+mapaToString [x] = mparaString x
+mapaToString (h:t) = mparaString h ++ ["\n"] ++  mapaToString t
+
+mparaString :: [Peca] -> [String]
+mparaString [] = []
+mparaString (Bloco Indestrutivel:t) = "I" : mparaString t
+mparaString (Bloco Destrutivel:t) = "D" : mparaString t
+mparaString (Vazia:t) = "V" : mparaString t
+-}
+identificaPeca :: Peca -> String
+identificaPeca (Bloco Indestrutivel) = "I"
+identificaPeca (Bloco Destrutivel) = "D"
+identificaPeca (Vazia) = "V"
+
+mpToStr :: Mapa -> String
+mpToStr [] = []
+mpToStr [x] = linhaMapa x
+mpToStr (h:t) = linhaMapa h ++ "\n" ++ mpToStr t
+
+linhaMapa :: [Peca] -> String
+linhaMapa [] = []
+linhaMapa peca = nTimes ++ linhaMapa resto
+  where
+    nTimes = show (length $ takeWhile (==head peca) peca) ++ (identificaPeca . head $ peca)
+    resto = dropWhile (==head peca) peca
+
+toMapa :: String -> Mapa
+toMapa str = let newStr = str ++ "\n"
+             in toMapaAux newStr
+
+toMapaAux :: String -> Mapa
+toMapaAux [] = []
+toMapaAux str = aux (takeWhile (/='\n') str) : toMapaAux (tail $ dropWhile (/='\n') str)
+
+aux :: String -> [Peca]
+aux [] = []
+aux str = replicate xTimes peca ++ aux (drop 1 resto)
+  where
+    xTimes = read $ takeWhile (not . isLetter) str :: Int
+    resto = dropWhile (not . isLetter) str
+    peca = fromCharToPeca $ head $ resto
+
+fromCharToPeca :: Char -> Peca
+fromCharToPeca 'I' = Bloco Indestrutivel
+fromCharToPeca 'D' = Bloco Destrutivel
+fromCharToPeca 'V' = Vazia
+
+---------------------------------------------------------------------------------------------------------
+
+--JOGADOR PARA STRING
+jogadorAsString :: [Jogador] -> String
+jogadorAsString j = removeSpaces $ jogadorParaStr j
+
+jogadorParaStr :: [Jogador] -> String
+jogadorParaStr [] = []
+jogadorParaStr [x] = jparaString x
+jogadorParaStr (h:t) = jparaString h ++ "\n" ++ jogadorParaStr t
+
+jparaString :: Jogador -> String
+jparaString (Jogador p d v l c) = (show p)++(show d)++(show v)++"*"++(show l)++"*"++(show c)
+---------------------------------------------------------------------------------------------------------
+
+--DISPAROS PARA STRING
+disparosAsString :: [Disparo] -> String
+disparosAsString d = removeSpaces $ disparosToString d
+
+disparosToString :: [Disparo] -> String
+disparosToString [] = []
+disparosToString [x] = disparosParaString x
+disparosToString (h:t) = disparosParaString h ++ "\n" ++ disparosToString t
+
+disparosParaString :: Disparo -> String
+disparosParaString (DisparoCanhao ind pos dir) = "K" ++ (show ind) ++ (show pos)   ++ (show dir)
+disparosParaString (DisparoLaser  ind pos dir) = "L" ++ (show ind) ++ (show pos)   ++ (show dir)
+disparosParaString (DisparoChoque ind tic)     = "C" ++ (show ind) ++ (show tic)
+---------------------------------------------------------------------------------------------------------
+
+--STRING PARA MAPA
+stringToMapa :: String -> Mapa
+stringToMapa str = let newStr = str ++ "\n"
+                   in stringToMapa_aux newStr
+
+stringToMapa_aux :: String -> Mapa
+stringToMapa_aux [] = []
+stringToMapa_aux str = paraPeca (takeWhile (/='\n') str) : stringToMapa_aux (tail (dropWhile (/='\n') str)) --tail pq nao queremos '\n'
+
+paraPeca :: String -> [Peca]
+paraPeca [] = []
+paraPeca ('I':t) = (Bloco Indestrutivel) :  paraPeca t
+paraPeca ('D':t) = (Bloco Destrutivel) : paraPeca t
+paraPeca ('V':t) = (Vazia) : paraPeca t
+
+--STRING PARA JOGADOR
+stringToJogador :: String -> [Jogador]
+stringToJogador str = let newStr = str ++ "\n"
+                      in stringToJogador_aux newStr
+
+stringToJogador_aux :: String -> [Jogador]
+stringToJogador_aux [] = []
+stringToJogador_aux str = paraJogador (takeWhile (/='\n') str) ++ stringToJogador_aux (tail (dropWhile (/='\n') str)) --tail pq nao queremos '\n'
+
+paraJogador :: String -> [Jogador]
+paraJogador [] = []
+paraJogador str = [Jogador pos dir vidas l c]
+  where
+    pos         = read $ takeWhile (/=')') str ++ ")" :: Posicao
+    dir         = read $ take 1 $ tail $ dropWhile (/=')') str :: Direcao
+    vidlasechoq = separa $ tail $ dropWhile (not . isLetter) str
+    vidas       = (!!) vidlasechoq 0 :: Int
+    l           = (!!) vidlasechoq 1 :: Int
+    c           = (!!) vidlasechoq 2 :: Int
+
+separa :: String -> [Int]
+separa [] = []
+separa ('*':t) = separa t
+separa str = valor : separa resto
+  where
+    valor = read $ takeWhile (/='*') str :: Int
+    resto = tail $ dropWhile (/='*') str
+
+--STRING PARA DISPARO
+stringToDisparo :: String -> [Disparo]
+stringToDisparo str = let newStr = str ++ "\n"
+                      in stringToDisparo_aux newStr
+
+stringToDisparo_aux :: String -> [Disparo]
+stringToDisparo_aux [] = []
+stringToDisparo_aux str = paraDisparo (takeWhile (/='\n') str) ++ stringToDisparo_aux (tail (dropWhile (/='\n') str)) --tail pq nao queremos '\n'
+
+paraDisparo :: String -> [Disparo]
+paraDisparo [] = []
+paraDisparo str | head str == 'K' = [DisparoCanhao ind pos dir] 
+                | head str == 'L' = [DisparoLaser ind pos dir]                
+                | head str == 'C' = [DisparoChoque ind ticks]
+  where 
+    list = tail str
+    ind  = read $ take 1 list :: Int
+    pos  = read $ takeWhile (/=')') (drop 1 list) ++ ")" :: Posicao
+    dir  = read $ dropWhile (not . isLetter) list :: Direcao
+
+type Str = (String,String,String)
+
+divideString :: String -> Str
+divideString [] = ([],[],[])
+divideString str = divideString_aux 0 str [] [] []
+
+divideString_aux :: Int -> String -> String -> String -> String -> Str
+divideString_aux _ [] l1 l2 l3 = (l1,l2,l3)
+divideString_aux x ('|':t) l1 l2 l3 = divideString_aux (succ x) t l1 l2 l3
+divideString_aux 0 (h:t) l1 l2 l3 = divideString_aux 0 t (l1++[h]) l2 l3
+divideString_aux 1 (h:t) l1 l2 l3 = divideString_aux 1 t l1 (l2++[h]) l3
+divideString_aux 2 (h:t) l1 l2 l3 = divideString_aux 2 t l1 l2 (l3++[h])
+
+removeSpaces :: String -> String
+removeSpaces [] = []
+removeSpaces (h:' ':a) = removeSpaces (h : a)
+removeSpaces (a:b) = a : removeSpaces b
+
+-- * Funções principais da Tarefa 3.
+
+-- | Comprime um 'Estado' para formato textual.
+--
+-- __NB:__ A função 'show' representa um 'Estado' num formato textual facilmente legível mas extenso.
+--
+-- __NB:__ Uma boa solução deve representar o 'Estado' dado no mínimo número de caracteres possível.
+comprime :: Estado -> String
+comprime (Estado mapa jog disp) = mpToStr mapa ++ "|" ++ jogadorAsString jog ++ "|" ++ disparosAsString disp
+
+-- | Descomprime um 'Estado' no formato textual utilizado pela função 'comprime'.
+--
+-- __NB:__ A função 'comprime' é válida de for possível recuperar o 'Estado' utilizando a função 'descomprime', i.e.:
+--
+-- prop> descomprime . comprime = id
+--
+-- __NB:__ Esta propriedade é particularmente válida para a solução pré-definida:
+--
+-- prop> read . show = id
+descomprime :: String -> Estado
+descomprime str = let (mapaStr, playerStr, dispStr) = divideString str
+                  in Estado mapa player disp
+  where
+    (mapaStr, playerStr, dispStr) = divideString str
+    mapa   = if null mapaStr   then [] else toMapa mapaStr
+    player = if null playerStr then [] else stringToJogador playerStr
+    disp   = if null dispStr   then [] else stringToDisparo dispStr

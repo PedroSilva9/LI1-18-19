@@ -1,0 +1,388 @@
+{-
+-- | Este módulo define funções comuns da Tarefa 3 do trabalho prático.
+module Tarefa3_2018li1g027 where
+import Data.List
+import Data.Char
+import LI11819
+import Tarefa2_2018li1g027
+import TestesT3
+
+-- * Testes
+
+-- | Testes unitários da Tarefa 3.
+--
+-- Cada teste é um 'Estado'.
+testesT3 :: [Estado]
+testesT3 = test 
+
+takeWhileInclusive :: (a -> Bool) -> [a] -> [a]
+takeWhileInclusive _ [] = []
+takeWhileInclusive p (x:xs) = x : if p x then takeWhileInclusive p xs
+                                         else []
+
+-- MAPA PARA STRING
+identificaPeca :: Peca -> String
+identificaPeca (Bloco Indestrutivel) = "I"
+identificaPeca (Bloco Destrutivel) = "D"
+identificaPeca (Vazia) = "V"
+
+mpToStr :: Mapa -> String
+mpToStr [] = []
+mpToStr [x] = linhaMapa x
+mpToStr (h:t) = linhaMapa h ++ "\n" ++ mpToStr t
+
+linhaMapa :: [Peca] -> String
+linhaMapa [] = []
+linhaMapa peca = nTimes ++ linhaMapa resto
+  where
+    tuplo  = span (==head peca) peca
+    nTimes = show (length . fst $ tuplo) ++ (identificaPeca . head $ peca)
+    resto  = snd tuplo
+
+toMapa :: String -> Mapa
+toMapa [] = []
+toMapa str = let newStr = str ++ "\n"
+             in toMapaAux newStr
+
+toMapaAux :: String -> Mapa
+toMapaAux [] = []
+toMapaAux str = let tuplo = span (/='\n') str
+                in  aux (fst tuplo) : toMapaAux (tail . snd $ tuplo)
+
+aux :: String -> [Peca]
+aux [] = []
+aux str = replicate xTimes peca ++ aux (tail resto)
+  where
+    tuplo  = span (not . isLetter) str
+    xTimes = read . fst $ tuplo :: Int
+    resto  = snd tuplo
+    peca   = fromCharToPeca . head $ resto
+
+fromCharToPeca :: Char -> Peca
+fromCharToPeca 'I' = Bloco Indestrutivel
+fromCharToPeca 'D' = Bloco Destrutivel
+fromCharToPeca 'V' = Vazia
+
+---------------------------------------------------------------------------------------------------------
+
+--JOGADOR PARA STRING
+jogadorParaStr :: [Jogador] -> String
+jogadorParaStr [] = []
+jogadorParaStr [x] = jparaString x
+jogadorParaStr (h:t) = jparaString h ++ "\n" ++ jogadorParaStr t
+
+jparaString :: Jogador -> String
+jparaString (Jogador p d v l c) = (show p)++(show d)++(show v)++"*"++(show l)++"*"++(show c)++"*"
+---------------------------------------------------------------------------------------------------------
+
+--DISPAROS PARA STRING
+disparosToString :: [Disparo] -> String
+disparosToString [] = []
+disparosToString [x] = disparosParaString x
+disparosToString (h:t) = disparosParaString h ++ "\n" ++ disparosToString t
+
+disparosParaString :: Disparo -> String
+disparosParaString (DisparoCanhao ind pos dir) = "K" ++ (show ind) ++ (show pos) ++ (show dir)
+disparosParaString (DisparoLaser  ind pos dir) = "L" ++ (show ind) ++ (show pos) ++ (show dir)
+disparosParaString (DisparoChoque ind tic)     = "C" ++ (show ind) ++ (show tic)
+---------------------------------------------------------------------------------------------------------
+--STRING PARA JOGADOR
+stringToJogador :: String -> [Jogador]
+stringToJogador [] = []
+stringToJogador str = let newStr = str ++ "\n"
+                      in stringToJogador_aux newStr
+
+stringToJogador_aux :: String -> [Jogador]
+stringToJogador_aux [] = []
+stringToJogador_aux str = let tuplo = span (/='\n') str
+                          in  paraJogador (fst tuplo) ++ stringToJogador_aux (tail . snd $ tuplo) --tail pq nao queremos '\n'
+
+paraJogador :: String -> [Jogador]
+paraJogador [] = []
+paraJogador str = [Jogador pos dir vidas l c]
+  where
+    pos         = read $ takeWhileInclusive (/=')') str :: Posicao
+    resto       = dropWhile (not . isLetter) str
+    dir         = read $ take 1 $ resto :: Direcao
+    vidlasechoq = separa . tail $ resto
+    vidas       = (!!) vidlasechoq 0 :: Int
+    l           = (!!) vidlasechoq 1 :: Int
+    c           = (!!) vidlasechoq 2 :: Int
+
+separa :: String -> [Int]
+separa [] = []
+separa str = valor : separa resto
+  where
+    tuplo = span (/='*') str
+    valor = read . fst $ tuplo:: Int
+    resto = tail . snd $ tuplo
+
+--STRING PARA DISPARO
+stringToDisparo :: String -> [Disparo]
+stringToDisparo [] = []
+stringToDisparo str = let newStr = str ++ "\n"
+                      in stringToDisparo_aux newStr
+
+stringToDisparo_aux :: String -> [Disparo]
+stringToDisparo_aux [] = []
+stringToDisparo_aux str = let tuplo = span (/='\n') str
+                          in  paraDisparo (fst tuplo) ++ stringToDisparo_aux (tail . snd $ tuplo) --tail pq nao queremos '\n'
+
+paraDisparo :: String -> [Disparo]
+paraDisparo [] = []
+paraDisparo str | head str == 'K' = [DisparoCanhao ind pos dir] 
+                | head str == 'L' = [DisparoLaser ind pos dir]                
+                | head str == 'C' = [DisparoChoque ind ticks]
+  where 
+    list = tail str
+    ind  = read $ take 1 list :: Int
+    pos  = read $ takeWhileInclusive (/=')') (drop 1 list)  :: Posicao
+    dir  = read $ dropWhile (not . isLetter) list :: Direcao
+
+type Str = (String,String,String)
+
+divideString :: String -> Str
+divideString [] = ([],[],[])
+divideString str = divideString_aux 0 str [] [] []
+
+divideString_aux :: Int -> String -> String -> String -> String -> Str
+divideString_aux _ [] l1 l2 l3 = (l1,l2,l3)
+divideString_aux x ('|':t) l1 l2 l3 = divideString_aux (succ x) t l1 l2 l3
+divideString_aux 0 (h:t) l1 l2 l3 = divideString_aux 0 t (l1++[h]) l2 l3
+divideString_aux 1 (h:t) l1 l2 l3 = divideString_aux 1 t l1 (l2++[h]) l3
+divideString_aux 2 (h:t) l1 l2 l3 = divideString_aux 2 t l1 l2 (l3++[h])
+
+-- * Funções principais da Tarefa 3.
+
+-- | Comprime um 'Estado' para formato textual.
+--
+-- __NB:__ A função 'show' representa um 'Estado' num formato textual facilmente legível mas extenso.
+--
+-- __NB:__ Uma boa solução deve representar o 'Estado' dado no mínimo número de caracteres possível.
+comprime :: Estado -> String
+comprime (Estado mapa jog disp) = mpToStr mapa ++ "|" ++ jogadorParaStr jog ++ "|" ++ disparosToString disp
+
+-- | Descomprime um 'Estado' no formato textual utilizado pela função 'comprime'.
+--
+-- __NB:__ A função 'comprime' é válida de for possível recuperar o 'Estado' utilizando a função 'descomprime', i.e.:
+--
+-- prop> descomprime . comprime = id
+--
+-- __NB:__ Esta propriedade é particularmente válida para a solução pré-definida:
+--
+-- prop> read . show = id
+descomprime :: String -> Estado
+descomprime str = let (mapaStr, playerStr, dispStr) = divideString str
+                  in Estado mapa player disp
+  where
+    (mapaStr, playerStr, dispStr) = divideString str
+    mapa   = if null mapaStr   then [] else toMapa mapaStr
+    player = if null playerStr then [] else stringToJogador playerStr
+    disp   = if null dispStr   then [] else stringToDisparo dispStr
+
+-}
+
+module Tarefa3_2018li1g027 where
+import Data.List
+import Data.Char
+import LI11819
+import Tarefa2_2018li1g027
+import TestesT3
+
+-- * Testes
+
+-- | Testes unitários da Tarefa 3.
+--
+-- Cada teste é um 'Estado'.
+testesT3 :: [Estado]
+testesT3 = test 
+
+--MAPA PARA STRING--
+pecasDoMeio :: String -> String
+pecasDoMeio [] = ""
+pecasDoMeio l = filter (/='I') l  
+
+identificadorDePeca :: Peca -> String
+identificadorDePeca (Bloco Indestrutivel) = "I" 
+identificadorDePeca (Bloco Destrutivel) = "D"
+identificadorDePeca (Vazia) = "V"
+
+
+identicaPecasUnitariasJuntas :: String -> String
+identicaPecasUnitariasJuntas [] = []
+identicaPecasUnitariasJuntas l = let (l1,l2) = span (/=',') l
+                                     resto = l2
+                                 in if l2 == [] then l1 ++ identicaPecasUnitariasJuntas l2 else if head l2 == head (tail resto) then l1 ++ "}" ++ identicaPecasUnitariasJuntas (tail (tail resto)) else l1++ "," ++ identicaPecasUnitariasJuntas (tail resto)
+
+
+identificadorUnitario :: Char -> Char
+identificadorUnitario c = if c == 'V' then '-' else if c == 'D' then '.' else ','
+
+convertLinhaToString :: [Peca] -> String
+convertLinhaToString [] = []
+convertLinhaToString (x:xs) = identificadorDePeca x ++ convertLinhaToString xs
+
+mapaParaIdent :: Mapa -> String
+mapaParaIdent [] = ""
+mapaParaIdent [x] = substituiPecaUnitaria (repetePecas (convertLinhaToString x))
+mapaParaIdent (x:xs) = substituiPecaUnitaria (repetePecas (convertLinhaToString x)) ++ mapaParaIdent xs
+
+transformaMapa :: Mapa -> String
+transformaMapa [] = []
+transformaMapa (x:xs) =show (length (head (x:xs))) ++ "+" ++ identicaPecasUnitariasJuntas (mapaParaIdent (x:xs))  
+
+getSizeMap :: String -> Int
+getSizeMap l = read $ takeWhile (isDigit) l :: Int
+
+repetePecas :: String -> String
+repetePecas [] = ""
+repetePecas l = let (x,y) = span (== head l) l
+                in  aux x ++ repetePecas y 
+   where aux :: String -> String
+         aux [] = ""
+         aux x = let (l1,l2) = span (== head x) x
+                 in show (length l1) ++[head x] ++ l2     
+
+substituiPecaUnitaria :: String -> String
+substituiPecaUnitaria [] = []
+substituiPecaUnitaria l = let (t,h) = (takeWhile (isDigit) l, dropWhile (isDigit) l)
+                          in if t == "1"then ([identificadorUnitario (head h)] ++ substituiPecaUnitaria (tail h)) else t++[(head h)] ++(substituiPecaUnitaria (tail h))  
+
+--STRING PARA MAPA--
+verificaIndicePU :: Char -> Bool
+verificaIndicePU x = x /= '.' && x /= ',' && x /= '-' && x /= '|'
+
+pecasUniJuntas2PecasUni :: String -> String
+pecasUniJuntas2PecasUni [] = []
+pecasUniJuntas2PecasUni l = let (l1,l2) = span (/='}') l
+                            in if l2 == [] then l1 else l1 ++ ",," ++ pecasUniJuntas2PecasUni (tail l2)  
+
+subsPU2Peca :: Char -> String
+subsPU2Peca '.' = "D"
+subsPU2Peca ',' = "I"
+subsPU2Peca '-' = "V"
+
+pecasUni2Normal :: String -> String
+pecasUni2Normal [] = []
+pecasUni2Normal l = let (l1,l2) = span (\c -> verificaIndicePU c) l
+                    in if (head l2) == '|' then l1 else l1 ++ "1"++ subsPU2Peca (head l2) ++ pecasUni2Normal (tail l2)    
+
+lString2lMapa :: String -> [Peca]
+lString2lMapa [] = []
+lString2lMapa l = [identificador2Peca (head l)] ++ lString2lMapa (tail l) 
+
+lstr2lmp :: Int -> String -> Mapa
+lstr2lmp _ [] = []
+lstr2lmp a l = [lString2lMapa (take a l)] ++ lstr2lmp a (drop a l)
+
+str2mp :: String -> Mapa
+str2mp [] = []
+str2mp l = let (l1,l2) = span (/= '+') l
+               size = read l1 :: Int
+               lista = tail l2
+           in lstr2lmp size (replicaPecas (pecasUni2Normal (pecasUniJuntas2PecasUni lista)))
+
+replicaPecas :: String -> String
+replicaPecas [] = []
+replicaPecas l = let (l1,l2) = span (isDigit) l
+                     x = head l2
+                     y = read l1 :: Int
+                     resto = l2  
+                 in replicate y x ++ replicaPecas (tail resto) 
+
+identificador2Peca :: Char -> Peca
+identificador2Peca 'I' = Bloco Indestrutivel 
+identificador2Peca 'D' = Bloco Destrutivel
+identificador2Peca 'V' = Vazia
+
+-- Jogadores Para String --
+plr2String :: [Jogador] -> String
+plr2String [] = []
+plr2String [x] = jogadorParaString x ++ "*"
+plr2String (x:xs) = jogadorParaString x ++ "*" ++ plr2String xs 
+
+
+jogadorParaString :: Jogador -> String
+jogadorParaString (Jogador pos dir v l c) = (show v) ++ (show pos) ++ (show l) ++ (show dir) ++ (show c) 
+
+--String para Jogador--
+str2ListJog :: String -> [Jogador]
+str2ListJog [] = []
+str2ListJog l = if dropWhile (/='*') l == [] then [] else str2Jogador (takeWhile (/= '*') l) ++ str2ListJog (tail (dropWhile (/='*') l))
+
+str2Jogador :: String -> [Jogador]
+str2Jogador l = [(Jogador pos dir v la c)]
+    where v =read $ takeWhile (isDigit) l :: Int
+          restoSemVida = dropWhile (isDigit) l 
+          pos = read $ takeWhile (/=')') restoSemVida ++ ")" :: Posicao
+          restoSemPos = tail $ dropWhile (/=')') restoSemVida  
+          la = read $ takeWhile (isDigit) restoSemPos :: Int
+          restoSemLaser = dropWhile (isDigit) restoSemPos
+          dir = read $ takeWhile (isLetter) restoSemLaser :: Direcao
+          restoSemDir = tail restoSemLaser
+          c = read restoSemDir :: Int
+
+--Disparo Para String--
+disp2Str :: [Disparo] -> String
+disp2Str [] = ""
+disp2Str [x] = disparoParaStr x ++ "+"
+disp2Str (x:xs) = disparoParaStr x ++ "+" ++ disp2Str xs
+
+disparoParaStr :: Disparo -> String
+disparoParaStr (DisparoLaser jd p direc) = "L" ++ show jd ++ show p ++ show direc
+disparoParaStr (DisparoCanhao jd p direc) = "C" ++ show jd ++ show p ++ show direc
+disparoParaStr (DisparoChoque jd t) = "H" ++ show jd ++ show t
+
+--String Para Disparo--
+str2ldisp :: String -> [Disparo]
+str2ldisp [] = []
+str2ldisp l = if dropWhile (/='+') l == [] then [] else str2disparo (takeWhile (/= '+') l) ++ str2ldisp (tail (dropWhile(/= '+') l))
+
+str2disparo :: String -> [Disparo]
+str2disparo [] = []
+str2disparo l = if head l == 'L' then [(DisparoLaser jd pos dir)] else if head l == 'H' then [(DisparoChoque jd t)] else [(DisparoCanhao jd pos dir)]
+    where listaSemHead = tail l
+          jd = digitToInt $ head listaSemHead 
+          semJogador = tail listaSemHead
+          pos = read $ (takeWhile (/=')') semJogador) ++ ")" :: Posicao
+          semPos = tail $ dropWhile (/=')') semJogador 
+          dir = read semPos :: Direcao
+          t = read $ takeWhile (isDigit) (tail listaSemHead) :: Int 
+
+comprime :: Estado -> String
+comprime (Estado m jod dis) = transformaMapa m ++ "|"++ plr2String jod ++ "|" ++ disp2Str dis
+
+-- | Descomprime um 'Estado' no formato textual utilizado pela função 'comprime'.
+--
+-- __NB:__ A função 'comprime' é válida de for possível recuperar o 'Estado' utilizando a função 'descomprime', i.e.:
+--
+-- prop> descomprime . comprime = id
+--
+-- __NB:__ Esta propriedade é particularmente válida para a solução pré-definida:
+--
+-- prop> read . show = id
+verificaDivisao :: String -> Int -> Int
+verificaDivisao [] a = -1 
+verificaDivisao (x:xs) a = if x == '|' then a else verificaDivisao xs (a+1)
+
+separaStr :: String -> [String]
+separaStr [] = []
+separaStr l = [fst (splitAt ind l)] ++ [fst (splitAt ind2 secondsplitlist)] ++ [thirdSplitList]
+    where ind = verificaDivisao l 0
+          secondsplitlist = tail.snd $ splitAt ind l
+          ind2 = verificaDivisao secondsplitlist 0
+          thirdSplitList = tail.snd $ splitAt ind2 secondsplitlist
+
+descomprime :: String -> Estado
+descomprime l = (Estado m lj ld)
+    where m = str2mp (head (separaStr l) ++ "|")
+          lj = str2ListJog . head . tail $ separaStr l
+          ld = str2ldisp . last $ separaStr l 
+
+
+
+
+
+
+
+        

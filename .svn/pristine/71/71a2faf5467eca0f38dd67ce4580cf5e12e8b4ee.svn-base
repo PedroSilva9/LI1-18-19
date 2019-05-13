@@ -1,0 +1,39 @@
+module Matrizes where
+import Data.List
+import LI11819
+
+type Matriz a = [[a]]
+
+matrizI :: Matriz Bool
+matrizI = replicate 4 [False, True, False, False]
+
+matrizJ :: Matriz Bool
+matrizJ = [[False,True, False],
+           [False,True, False],
+           [True,True, False]]
+
+matrizL :: Matriz Bool
+matrizL = [[False,True, False], 
+           [False,True, False],
+           [False,True, True]]
+
+matrizO :: Matriz Bool 
+matrizO = replicate 2 [True, True]
+
+matrizZ :: Matriz Bool
+matrizZ = [[True,True,False],
+           [False,True,True],
+           [False,False,False]]
+
+matrizT :: Matriz Bool
+matrizT = [[False,False,False],
+           [True,True,True],
+           [False,True,False]]
+
+matrizS :: Matriz Bool
+matrizS = [[False,True,True],
+           [True,True,False],
+           [False,False,False]]
+
+allM :: [Matriz Bool]
+allM = [matrizI ,matrizJ, matrizL ,matrizO ,matrizS ,matrizT ,matrizZ]

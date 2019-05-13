@@ -1,0 +1,595 @@
+-- | Este módulo define funções comuns da Tarefa 5 do trabalho prático.
+module Main where
+import Graphics.Gloss
+import LI11819
+import Data.List
+import Data.Maybe
+import Data.Char
+import Graphics.Gloss.Interface.Pure.Game
+import Graphics.Gloss.Data.Picture
+import Graphics.Gloss.Data.Bitmap
+import Graphics.Gloss.Data.Vector
+import System.Random
+import Tarefa3_2018li1g027
+import Tarefa2_2018li1g027
+import Tarefa1_2018li1g027
+import Tarefa4_2018li1g027
+-- | Função principal da Tarefa 5.
+--
+-- __NB:__ Esta Tarefa é completamente livre. Deve utilizar a biblioteca <http://hackage.haskell.org/package/gloss gloss> para animar o jogo, e reutilizar __de forma completa__ as funções das tarefas anteriores.
+
+data EstadoGloss = EstadoGloss
+    { estado         :: Estado
+    , editor         :: Editor
+    , menu           :: Bool            -- ^ Verifica se está no menu ou dentro do jogo
+    , imagens        :: Imagens         -- ^Imagens usadas em todas as fases do jogo
+    , nJog           :: Int             -- ^Numero de jogadores
+    , tMenu          :: Picture         -- ^Picture do menu em que está
+    , acoesMapa      :: [Instrucao]     -- ^Mundacas que ocorrem na construcao do mapa
+    , criaMapa       :: Bool            -- ^Verifica se está ou não na fase de criar um mapa
+    , powerups       :: [Powerup]       -- ^Conjunto dos powerups presentes no mapa
+    , powerUpCounter :: Int             -- ^Tempo de intervalo entre a geração de powerups
+    , rnd            :: StdGen 
+    , empty          :: [PosicaoGrelha] -- ^Posições do mapa vazias
+    , tickCounter    :: Int          -- ^Conjunto de caracteres no contador de ticks
+    , windowSize     :: (Int,Int)
+    }   
+
+data Imagens = Imagens
+    { imagensMenu        :: [Picture]
+    , imagensJogo        :: [Picture]
+    , imagensPowerUps    :: [Picture]
+    , imagensTickCounter :: [Picture]
+    }
+
+data Powerup 
+    = PowerupVida
+        { posicaoPowerUp :: PosicaoGrelha }
+    | PowerupTeleport
+        { posicaoPowerUp :: PosicaoGrelha }
+    | PowerupLasers
+        { posicaoPowerUp :: PosicaoGrelha }
+    | PowerupChoques
+        { posicaoPowerUp :: PosicaoGrelha }
+  deriving (Read,Show,Eq)
+
+estadoI :: Imagens -> EstadoGloss
+estadoI a = EstadoGloss 
+            { estado          = Estado {mapaEstado = mapaInicial (6,6), jogadoresEstado = [],disparosEstado = []}
+            , editor          = instrucao Desenha $ editorInicial []
+            , menu            = True
+            , imagens         = a 
+            , nJog            = 1
+            , tMenu           = (imagensMenu a) !! 0
+            , acoesMapa       = []
+            , criaMapa        = False
+            , powerups        = []
+            , powerUpCounter  = 100
+            , rnd             = mkStdGen 5 
+            , empty           = []
+            , tickCounter     = 0
+            , windowSize      = (1280,720)
+            }
+
+reageEvento :: Event -> EstadoGloss -> EstadoGloss
+reageEvento f estado = if menu estado 
+                          then reageEventoMenu f estado 
+                          else if criaMapa estado then reageEventoCriaMapa f estado else reageEventoJogo f estado 
+
+reageEventoMenu :: Event -> EstadoGloss -> EstadoGloss
+reageEventoMenu event e = reageEventoMenuAux event e (tMenu e) (imagensMenu . imagens $ e)
+
+reageEventoMenuAux :: Event -> EstadoGloss -> Picture -> [Picture] -> EstadoGloss
+reageEventoMenuAux (EventKey (SpecialKey KeyUp) Down _ _) e pic img = case elemIndex pic img of 
+                                                                        Just 1 -> e{tMenu = img !! 2}
+                                                                        Just 2 -> e{tMenu = img !! 1}
+                                                                        Just 4 -> e{tMenu = img !! 5} 
+                                                                        Just 7 -> e{tMenu = img !! 6} 
+                                                                        _ -> e
+
+reageEventoMenuAux (EventKey (SpecialKey KeyDown) Down _ _) e pic img = case elemIndex pic img of 
+                                                                          Just 1 -> e{tMenu = img !! 2} 
+                                                                          Just 2 -> e{tMenu = img !! 1}
+                                                                          Just 5 -> e{tMenu = img !! 4}
+                                                                          Just 6 -> e{tMenu = img !! 7}
+                                                                          _ -> e
+
+reageEventoMenuAux (EventKey (SpecialKey KeyEnter) Down _ _) e pic img = case elemIndex pic img of 
+                                                                           Just 1 -> e{criaMapa = True,menu = False}
+                                                                           Just 0 -> e{tMenu = img !! 1}
+                                                                           Just 4 -> estadoI (imagens e)
+                                                                           Just 6 -> estadoI (imagens e)
+                                                                           Just 5 -> e{criaMapa = True, menu = False,acoesMapa = [], editor = instrucao Desenha $ editorInicial []}
+                                                                           Just 7 -> resetGame e
+                                                                           _ -> e
+
+reageEventoMenuAux (EventKey key Down _ _) e pic img | elem key numeroJogador = if verifyValidMap e ((fromJust $ elemIndex key numeroJogador)+1) then estadoValido else estadoInvalido  
+  where 
+    estadoInvalido = e{menu=True, tMenu = img !! 5}
+    estadoValido = e{estado = changePlrEstado e ((fromJust $ elemIndex key numeroJogador)+1),menu = False,criaMapa = False,nJog = ((fromJust $ elemIndex key numeroJogador)+1),tickCounter = 0}
+reageEventoMenuAux (EventKey (Char 'h') Down _ _) e pic img | pic == (imagensMenu . imagens $ e) !! 3= e{tMenu = img !! 0}
+reageEventoMenuAux (EventResize newWinSize) e pic img = e{windowSize = newWinSize} 
+reageEventoMenuAux _ e _ _ = e
+
+numeroJogador = [(Char '1'),(Char '2'),(Char '3'),(Char '4')]
+
+verifyValidMap :: EstadoGloss -> Int -> Bool
+verifyValidMap e a = numberPosVazias >= a
+  where mapa = mapaEstado . estado $ e
+        emptyPosList = checkPosVazia mapa
+        numberPosVazias = length emptyPosList
+
+
+resetGame :: EstadoGloss -> EstadoGloss
+resetGame e = e{estado = newEstado, menu = False, powerUpCounter = 0,empty = [] , rnd = mkStdGen 5,tickCounter = 0}
+  where 
+    jogList = jogadoresEstado . estado $ e
+    newest = Estado (constroi . acoesMapa $ e) jogList []
+    newEstado = changePlrEstado e{estado = newest} (length jogList)
+        
+
+changePlrEstado :: EstadoGloss -> Int -> Estado 
+changePlrEstado e a = Estado mapa newjogList dispList
+    where 
+      (Estado mapa jogList dispList) = estado e  
+      newjogList = posTank a e  
+
+desenhaEstado :: EstadoGloss -> Picture
+desenhaEstado e = if menu e 
+                     then tMenu e 
+                     else if criaMapa e then desenhaCriaMapa (mapaEditor . editor $ e) e else desenhaJogo e
+
+reageEventoCriaMapa :: Event -> EstadoGloss -> EstadoGloss
+reageEventoCriaMapa (EventKey (SpecialKey KeyRight) Down _ _) e = changeMap e $ Move D
+reageEventoCriaMapa (EventKey (SpecialKey KeyLeft) Down _ _) e  = changeMap e $ Move E
+reageEventoCriaMapa (EventKey (SpecialKey KeyUp) Down _ _) e    = changeMap e $ Move C
+reageEventoCriaMapa (EventKey (SpecialKey KeyDown) Down _ _) e  = changeMap e $ Move B
+reageEventoCriaMapa (EventKey (Char 'd') Down _ _) e            = changeMap e Desenha
+reageEventoCriaMapa (EventKey (Char 't') Down _ _) e            = changeMap e MudaTetromino
+reageEventoCriaMapa (EventKey (Char 'p') Down _ _) e            = changeMap e MudaParede
+reageEventoCriaMapa (EventKey (Char 'r') Down _ _) e            = changeMap e Roda
+reageEventoCriaMapa (EventKey (SpecialKey KeyEnter) Down _ _) e = e{estado = Estado{mapaEstado = (constroi .acoesMapa $ e),jogadoresEstado = [],disparosEstado =[]}, tMenu = (imagensMenu . imagens $ e) !! 3,menu = True, criaMapa = False,tickCounter = 0}
+reageEventoCriaMapa(EventResize newWinSize) e  = e{windowSize = newWinSize}
+reageEventoCriaMapa _ e = e 
+
+changeMap :: EstadoGloss -> Instrucao -> EstadoGloss
+changeMap e@EstadoGloss{editor = edit, acoesMapa = acoes} instrucao = e{editor = newEditor, acoesMapa = newAcoes}
+    where 
+      newEditor = edit{mapaEditor = (constroi $ acoes ++ [instrucao,Desenha])}
+      newAcoes  = acoes ++ [instrucao]
+
+-- Desenha quando se clica criar mapa no menu
+desenhaCriaMapa :: Mapa -> EstadoGloss -> Picture
+desenhaCriaMapa m e = Pictures $ desenhaMapa m posX posY bSize pixelSize e
+    where 
+      (bSize,pixelSize) = pecaSize e m
+      (posX,posY)       = changeReferencial e m -- Mudar isto
+
+pecaSize :: EstadoGloss -> Mapa -> (Float,Float)
+pecaSize e m = (bestSize, pixelPecaSize)
+    where
+      (a,b) = windowSize e  
+      (tlinha,tcol) = (length . head $ m, length m)
+      sizePecaX     = (fromIntegral a)*0.7 / (fromIntegral $ tlinha * 100) 
+      sizePecaY     = (fromIntegral b)*0.9 / (fromIntegral $ tcol * 100) 
+      bestSize      = if sizePecaY > sizePecaX then sizePecaX else sizePecaY 
+      pixelPecaSize =  bestSize * 100
+
+--Mudanca de referencial?
+changeReferencial :: EstadoGloss -> Mapa -> (Float,Float)
+changeReferencial e m = (-posX,-posY) 
+    where
+      pixelPecaSize = snd $ pecaSize e m
+      (tlinha,tcol) = (length . head $ m, length m)       
+      (posX,posY)   = ((pixelPecaSize * (fromIntegral tlinha)) / 2 - (pixelPecaSize / 2), (pixelPecaSize * (fromIntegral tcol) / 2) - (pixelPecaSize / 2))
+
+--Melhor Posicao Para o tanque
+posTank :: Int -> EstadoGloss -> [Jogador]
+posTank a e = take a listjog
+    where 
+      mapa    = mapaEstado . estado $ e
+      (li,co) = (length mapa, length . head $ mapa)
+      jog1    = Jogador (bestPosTank e (0,0))   B 5 5 5
+      jog2    = Jogador (bestPosTank e (li,co)) C 5 5 5                      
+      jog3    = Jogador (bestPosTank e (0,co))  E 5 5 5                      
+      jog4    = Jogador (bestPosTank e (li,0))  D 5 5 5
+      listjog = [jog1,jog2,jog3,jog4]
+
+bestPosTank :: EstadoGloss -> Posicao -> Posicao
+bestPosTank e (x,y) = calculaPosMaisProx (x,y) listPosVazias
+    where 
+      m             = mapaEstado . estado $ e 
+      listPosVazias = checkPosVazia $ m
+
+calculaPosMaisProx :: Posicao -> [Posicao] -> Posicao
+calculaPosMaisProx pos listPosVazias = listPosVazias !! (distMenor $ map (aux pos) listPosVazias)          
+    where 
+      aux :: Posicao -> Posicao -> Float 
+      aux (x,y) h = dist (x,y) h                          
+
+distMenor :: [Float] -> Int
+distMenor [] = -1
+distMenor (h:t) = aux h 0 1 t
+    where 
+      aux vm indmin indreal [] = indmin
+      aux vm indmin indreal (x:xs) | x < vm    = aux x indreal (succ indreal) xs
+                                   | otherwise = aux vm indmin (succ indreal) xs  
+
+dist :: Posicao -> Posicao -> Float
+dist (a,b) (x,y) = sqrt $ (fromIntegral $ y-b)^2 + (fromIntegral $x-a)^2
+
+checkPosVazia :: Mapa -> [Posicao]
+checkPosVazia m = posOndeCabemTanques $ posVazia m allPosGroup
+    where 
+      allPos      = [(l,c) | l <- [0 .. pred . length $ m], c <- [0 .. pred . length . head $ m]]
+      allPosGroup = groupN allPos $ length . head $ m
+
+posOndeCabemTanques :: [Posicao] -> [Posicao]
+posOndeCabemTanques [] = []
+posOndeCabemTanques ((a,b):t) = if (a+1,b) `elem` ((a,b):t) && (a+1,b+1) `elem` ((a,b):t) && (a,b+1) `elem` ((a,b):t) 
+                                   then (a,b): posOndeCabemTanques t 
+                                   else posOndeCabemTanques t 
+
+posVazia :: Mapa -> [[Posicao]] -> [Posicao]
+posVazia [] [] = []
+posVazia (x:xs) (y:ys) = aux x y ++ posVazia xs ys
+  where 
+    aux :: [Peca] -> [Posicao] -> [Posicao]
+    aux [] [] = []
+    aux (x:xs) (y:ys) = if (x == Vazia) then y : aux xs ys else aux xs ys
+  
+-- Desenhar o mapa
+desenhaMapa :: Mapa -> Float -> Float -> Float -> Float -> EstadoGloss -> [Picture]
+desenhaMapa [] _ _ _ _ _= []
+desenhaMapa (h:t) posx posy bestSizeToScale pixelPecaSize e = pic : (desenhaMapa t posx (posy+pixelPecaSize) bestSizeToScale pixelPecaSize e)
+  where
+    pic = Translate posx (-posy) $ Pictures $ desenhaLinha e 0 pixelPecaSize bestSizeToScale h
+
+desenhaLinha :: EstadoGloss -> Float -> Float -> Float -> [Peca] -> [Picture]
+desenhaLinha e _ _ _ [] = []
+desenhaLinha e posI sizePixelPeca sizePecaToScale (h:t) = pic : (desenhaLinha e (posI+sizePixelPeca) sizePixelPeca sizePecaToScale t)
+  where
+    pic = Translate posI 0 $ Scale sizePecaToScale sizePecaToScale $ desenhaPeca e h
+
+desenhaPeca :: EstadoGloss -> Peca -> Picture
+desenhaPeca e (Bloco Indestrutivel) = (imagensJogo . imagens $ e) !! 0
+desenhaPeca e (Bloco Destrutivel)   = (imagensJogo . imagens $ e) !! 1
+desenhaPeca e (Vazia)               = (imagensJogo . imagens $ e) !! 2 
+
+
+desenhaJogo :: EstadoGloss -> Picture
+desenhaJogo e = Pictures list
+    where mapa    = mapaEstado . estado $ e  
+          picMapa = desenhaCriaMapa mapa e 
+          tanques = Pictures $ desenhaTanques e
+          tiros   = Pictures $ desenhaTiro e
+          powerUP = Pictures $ desenhaPowerUps e
+          ticks   = drawTicksCounter e    
+          list    = [picMapa,tanques,tiros,powerUP,ticks]  
+
+desenhaTanques :: EstadoGloss -> [Picture]
+desenhaTanques e = aux e listJogadores listPictures   
+    where 
+      (listPictures, listJogadores) = (pictureTank e, jogadoresEstado . estado $ e)
+      aux :: EstadoGloss -> [Jogador] -> [Picture] -> [Picture]
+      aux _ [] _ = []
+      aux _ _ [] = []
+      aux e (jog:jogs) (pic:pics) = if vidasJogador jog > 0 
+                                       then desenhaTank e jog pic : aux e jogs pics 
+                                       else aux e jogs pics
+
+desenhaTank :: EstadoGloss -> Jogador -> Picture -> Picture
+desenhaTank e (Jogador (x,y) dir v l c) pic = translateTank 
+    where 
+      mapa                        = mapaEstado . estado $ e
+      (sizeToScale,realPixelSize) = pecaSize e mapa
+      (posX,posY)                 = changeReferencial e mapa
+      resizeTank                  = scale (sizeToScale*2) (sizeToScale*2) pic
+      rotateTank                  = Rotate (direcaoToAngle dir) resizeTank   
+      (a,b)                       = (posX + (realPixelSize/2) +realPixelSize*fromIntegral y, posY + (realPixelSize / 2) + realPixelSize * fromIntegral x)
+      translateTank               = Translate a (-b) rotateTank
+
+
+direcaoToAngle :: Direcao -> Float
+direcaoToAngle = realToFrac . (*) 90 . fromEnum
+
+pictureTank :: EstadoGloss -> [Picture]
+pictureTank e = take njog listTanks 
+    where 
+      njog = nJog e
+      listTanks =take 4 $ drop 3 (imagensJogo.imagens $ e)
+
+
+
+desenhaTiro :: EstadoGloss -> [Picture]
+desenhaTiro e = map (aux e) listDisp
+    where 
+      listDisp = disparosEstado . estado $ e
+      aux :: EstadoGloss -> Disparo -> Picture
+      aux e d@(DisparoLaser n pos dir) = drawLaserPath e d 
+      aux e p = resizeTiro e p (pictureTiro e p) 
+
+drawLaserPath :: EstadoGloss -> Disparo -> Picture
+drawLaserPath e d@(DisparoLaser n pos dir) = Pictures $ aux e d laserCaminho  
+  where mapa              = (mapaEstado . estado $ e)   
+        allPos            = [(l,c) | l <- [0 .. pred . length $ mapa], c <- [0 .. pred . length . head $ mapa]]
+        allPosGroup       = groupN allPos $ length . head $ mapa
+        posIndes          = posIndestrutivel mapa allPosGroup
+        laserCaminho        = tail $ laserPath (pos,dir) posIndes
+        aux e d [] = []
+        aux e d@(DisparoLaser n pos dir) (h:t) = resizeTiro e d (pictureTiro e d) : aux e (DisparoLaser n h dir) t  
+
+resizeTiro :: EstadoGloss -> Disparo -> Picture -> Picture
+resizeTiro e (DisparoChoque jog tick) pic = translateChoque
+    where 
+      mapa                        = mapaEstado . estado $ e
+      (sizeToScale,realPixelSize) = pecaSize e mapa
+      (posX,posY)                 = changeReferencial e mapa
+      resTiroChoque               = scale (sizeToScale) ( sizeToScale) pic
+      (Jogador (a,b) dir v l c)   = (jogadoresEstado . estado $ e) !! jog  
+      (i,j)                       = (posX + (realPixelSize / 2) + realPixelSize*fromIntegral b, posY + (realPixelSize / 2) + realPixelSize * fromIntegral a)
+      translateChoque             = Translate i (-j) resTiroChoque
+resizeTiro e d pic = translCL
+    where 
+      mapa                        = mapaEstado . estado $ e
+      ((x,y), dir)                = (posicaoDisparo d,direcaoDisparo d)
+      (sizeToScale,realPixelSize) = pecaSize e mapa
+      (posX,posY)                 = changeReferencial e mapa
+      resTiroCL                   = scale (sizeToScale/2) (sizeToScale) pic
+      rotateCL                    = rotate (direcaoToAngle dir) resTiroCL
+      (a,b)                       = (posX +(realPixelSize/2)+realPixelSize*fromIntegral y, posY + (realPixelSize/2) + realPixelSize*fromIntegral x)
+      translCL                    = Translate a (-b) rotateCL 
+
+pictureTiro :: EstadoGloss -> Disparo -> Picture
+pictureTiro e (DisparoCanhao jog _ _) = (imagensJogo . imagens $ e) !! (jog + 7)
+pictureTiro e (DisparoLaser jog _ _)  = (imagensJogo . imagens $ e) !! (jog + 11)
+pictureTiro e (DisparoChoque jog _)   = (imagensJogo . imagens $ e) !! (jog + 15)  
+
+reageEventoJogo :: Event -> EstadoGloss -> EstadoGloss
+reageEventoJogo (EventKey key Down _ _) e | elem key moveB = changeJogadaEstado e (fromJust $ elemIndex key moveB) (Movimenta B)
+                                          | elem key moveC = changeJogadaEstado e (fromJust $ elemIndex key moveC) (Movimenta C)
+                                          | elem key moveD = changeJogadaEstado e (fromJust $ elemIndex key moveD) (Movimenta D)
+                                          | elem key moveE = changeJogadaEstado e (fromJust $ elemIndex key moveE) (Movimenta E)
+                                          | elem key canhao = changeJogadaEstado e (fromJust $ elemIndex key canhao) (Dispara Canhao)
+                                          | elem key lasers = changeJogadaEstado e (fromJust $ elemIndex key lasers) (Dispara Laser)
+                                          | elem key choque = changeJogadaEstado e (fromJust $ elemIndex key choque) (Dispara Choque)
+                                          | otherwise = e
+reageEventoJogo(EventResize newWinSize) e  = e{windowSize = newWinSize}                                           
+reageEventoJogo _ e = e
+
+moveB = [(Char 's'),(SpecialKey KeyDown),(Char 'k'),(Char '5')]
+moveC = [(Char 'w'),(SpecialKey KeyUp),(Char 'i'),(Char '8')]
+moveD = [(Char 'd'),(SpecialKey KeyRight),(Char 'l'),(Char '6')]
+moveE = [(Char 'a'),(SpecialKey KeyLeft),(Char 'j'),(Char '4')]
+canhao = [(Char '1'),(Char ','),(Char 'o'),(Char '0')]
+lasers = [(Char '2'),(Char '.'),(Char 'p'),(Char '7')]
+choque = [(Char '3'),(Char '-'),(Char '+'),(Char '9')]
+
+changeJogadaEstado :: EstadoGloss -> Int -> Jogada -> EstadoGloss 
+changeJogadaEstado e a jog = if checkVitoria e{estado = newest} 
+                                then e{menu = True, tMenu = (imagensMenu . imagens $ e) !! 6 } 
+                                else e{estado = newest}
+    where
+      est = estado e 
+      newest = if a > (pred . length . jogadoresEstado $ est) 
+                  then est
+                  else jogada a jog est             
+
+reageTempo :: Float -> EstadoGloss -> EstadoGloss 
+reageTempo n e = fetch{tickCounter = newticks}
+    where 
+      newEstado             = tick . estado $ e
+      allPos                = [(l,c) | l <- [0 .. pred . length . mapaEstado $ newEstado], c <- [0 .. pred . length . head . mapaEstado $ newEstado]]
+      allPosGroup           = groupN allPos $ length . head . mapaEstado $ newEstado
+      vazias                = posVazia (mapaEstado newEstado) allPosGroup
+      puPos                 = map posicaoPowerUp $ powerups e
+      (players, playersPos) = (jogadoresEstado . estado $ e, map posicaoJogador players)
+      newEstadoGloss        = e{estado = newEstado, empty = (vazias \\ puPos) \\ (concat $ map asSqr playersPos)}
+      generate              = if (null . empty $ newEstadoGloss) || (menu e) then newEstadoGloss else generatePowerUp newEstadoGloss
+      fetch                 = if (null . powerups $ generate) || (menu e) then generate else fetchPowerUps generate
+      newticks              = 1 + tickCounter e 
+      
+
+drawTicksCounter :: EstadoGloss -> Picture
+drawTicksCounter e = Pictures $ aux (reverse listcharTick) 2 e
+  where 
+    listcharTick = show . tickCounter $ e
+    aux [] _ _ = []
+    aux (h:t) n e = desenhaTick e n (pictureTick e h) : aux t (n+1.0) e 
+
+desenhaTick :: EstadoGloss -> Float -> Picture -> Picture
+desenhaTick e n pic = translateTick
+  where
+    mapa                        = mapaEstado . estado $ e
+    (a,b)                       = windowSize e 
+    (sizeToScale,realPixelSize) = pecaSize e mapa
+    resTickPic                  = scale (sizeToScale/6) (sizeToScale/6) pic
+    sumTranslate                = n * realPixelSize
+    translateTick               = Translate ((fromIntegral b) - sumTranslate-20) ((fromIntegral b)/2 - (realPixelSize)) resTickPic
+
+pictureTick :: EstadoGloss -> Char -> Picture
+pictureTick e c = let numero = digitToInt c
+                  in (imagensTickCounter . imagens $ e) !! numero   
+
+checkVitoria :: EstadoGloss -> Bool
+checkVitoria e = aux listajog == (pred . length $ listajog) && length listajog /= 1 
+  where 
+    listajog = jogadoresEstado . estado $ e
+    aux :: [Jogador] -> Int
+    aux [] = 0
+    aux (j:t)  = if vidasJogador j == 0 then 1 + aux t else aux t 
+
+posVazias :: Mapa -> [[Posicao]] -> [Posicao]
+posVazias [] [] = []
+posVazias (x:xs) (y:ys) = aux x y ++ posVazias xs ys
+  where
+    aux :: [Peca] -> [Posicao] -> [Posicao]
+    aux [] [] = []
+    aux (x:xs) (y:ys) = if (x == Vazia) then y : aux xs ys else aux xs ys
+
+generatePowerUp :: EstadoGloss -> EstadoGloss
+generatePowerUp e = let oldPowerUps = powerups e
+                    in if (powerUpCounter e <= 0) && (not . null $ vaziasAsSqr) && (all id $ map (verifiesEmpty mapa) $ asSqr newPos)
+                          then e{powerups = powerup : oldPowerUps, rnd = seed, powerUpCounter = 300}
+                          else e{powerUpCounter = pred . powerUpCounter $ e}
+  where
+    mapa          = mapaEstado . estado $ e
+    vaziasAsSqr   = generatePowerUpAux (mapaEstado . estado $ e) $ empty e
+    (rand, seed)  = randomR (0, pred . length $ vaziasAsSqr) $ rnd e
+    newPos        = vaziasAsSqr !! rand
+    powerup       = flip createPowerUp newPos $ mod rand 4
+
+verifiesEmpty :: Mapa -> Posicao -> Bool
+verifiesEmpty m (l,c) = (head . drop c . head $ drop l m) == Vazia
+
+createPowerUp :: Int -> PosicaoGrelha -> Powerup
+createPowerUp 0 pos = PowerupVida pos
+createPowerUp 1 pos = PowerupTeleport pos
+createPowerUp 2 pos = PowerupLasers pos
+createPowerUp 3 pos = PowerupChoques pos
+
+generatePowerUpAux :: Mapa -> [PosicaoGrelha] -> [PosicaoGrelha]
+generatePowerUpAux m p = catMaybes $ map (verifica m) p
+
+verifica :: Mapa -> PosicaoGrelha -> Maybe PosicaoGrelha
+verifica m p = if all id $ map (f m) asSquare
+                  then Just p
+                  else Nothing
+  where
+    asSquare = asSqr p
+    f :: Mapa -> Posicao -> Bool
+    f mp (l,c) = (flip (!!) (pred c) $ head $ drop l mp) == Vazia
+
+fetchPowerUps :: EstadoGloss -> EstadoGloss
+fetchPowerUps e = if null . empty $ e then e else e{estado = newEstado, powerups = deletePU, rnd = newSeed}
+  where
+    (players, playersPos)               = (jogadoresEstado . estado $ e, map posicaoJogador players)
+    (tp, resto)                         = partition (\e -> case e of {PowerupTeleport{} -> True; _ -> False}) $ powerups e
+    (tpPos, restoPos)                   = (map posicaoPowerUp tp, map posicaoPowerUp resto)
+    (intersectionTP, intersectionResto) = (intersect tpPos playersPos, intersect restoPos playersPos)
+    afterTP = teleported (rnd e) players intersectionTP $ (generatePowerUpAux (mapaEstado . estado $ e) $ empty e) \\ (concat $ map asSqr playersPos)
+    (newJTP, listSeed)                  = (map fst afterTP, map snd afterTP)
+    newSeed                             = if null listSeed then rnd e else last listSeed
+    (jAfterPU, deletePU)                = (aplicaPU newJTP playersPos resto, deletePowerUp (powerups e) $ intersectionTP ++ intersectionResto)
+    (est, newEstado)                    = (estado e, est{jogadoresEstado = jAfterPU})
+
+deletePowerUp :: [Powerup] -> [PosicaoGrelha] -> [Powerup]
+deletePowerUp [] _ = []
+deletePowerUp (pu:t) pos = let p = posicaoPowerUp pu
+                           in if elem p pos
+                                 then deletePowerUp t pos
+                                 else pu : deletePowerUp t pos
+
+aplicaPU :: [Jogador] -> [PosicaoGrelha] -> [Powerup] -> [Jogador]
+aplicaPU j jPos pu = map (flip aplicaPUAux pu) $ zip j jPos
+
+aplicaPUAux :: (Jogador,PosicaoGrelha) -> [Powerup] -> Jogador
+aplicaPUAux (j,_) [] = j
+aplicaPUAux jog@(j,pos) ((PowerupVida p):t)     = if (p == pos) 
+                                                     then j{vidasJogador = succ . vidasJogador $ j}
+                                                     else aplicaPUAux jog t
+aplicaPUAux jog@(j,pos) ((PowerupLasers p):t)   =  if (p == pos)
+                                                      then j{lasersJogador = succ . lasersJogador $ j}
+                                                      else aplicaPUAux jog t
+aplicaPUAux jog@(j,pos) ((PowerupChoques p):t)  = if (p == pos)
+                                                     then j{choquesJogador = succ . choquesJogador $ j}
+                                                     else aplicaPUAux jog t
+
+-- v = generatePowerUpAux ...
+teleported :: StdGen -> [Jogador] -> [PosicaoGrelha] -> [PosicaoGrelha] -> [(Jogador,StdGen)]
+teleported _ [] _ _ = []
+teleported seed l@(j:js) p v = if (elem pos p) && (length v >= 1) 
+                                  then (newJ, newSeed) : teleported newSeed js p (delete newPos v)
+                                  else (j,seed)        : teleported seed js p v
+  where
+    pos            = posicaoJogador j
+    (rnd, newSeed) = randomR (0, pred . length $ v) $ seed
+    allJpos        = concat $ map asSqr $ map posicaoJogador l
+    newPos         = if any id $ map (flip elem allJpos) $ asSqr (v !! rnd) then pos else v !! rnd
+    newJ           = j{posicaoJogador = newPos}
+
+desenhaPowerUps :: EstadoGloss -> [Picture]
+desenhaPowerUps e = map (aux e) listpowerup
+    where 
+      listpowerup = powerups e 
+      aux :: EstadoGloss -> Powerup -> Picture
+      aux e p = resizePowerUp e p (picturePowerUp e p)
+
+resizePowerUp :: EstadoGloss -> Powerup -> Picture -> Picture
+resizePowerUp e powerup pic = translatePU
+    where 
+      mapa                        = mapaEstado . estado $ e
+      (sizeToScale,realPixelSize) = pecaSize e mapa
+      (posX,posY)                 = changeReferencial e mapa
+      resPU                       = scale (sizeToScale/8) ( sizeToScale/8) pic
+      (a,b)                       = posicaoPowerUp powerup
+      (i,j)                       = (posX + (realPixelSize / 2) +realPixelSize * fromIntegral b , posY + (realPixelSize / 2) + realPixelSize*fromIntegral a)
+      translatePU                 = Translate i (-j) resPU
+
+picturePowerUp :: EstadoGloss -> Powerup -> Picture
+picturePowerUp e (PowerupLasers _)    = (imagensPowerUps . imagens $ e) !! 0
+picturePowerUp e (PowerupChoques _)   = (imagensPowerUps . imagens $ e) !! 1
+picturePowerUp e (PowerupTeleport _)  = (imagensPowerUps . imagens $ e) !! 2
+picturePowerUp e (PowerupVida _)      = (imagensPowerUps . imagens $ e) !! 3            
+
+dm :: Display 
+dm = InWindow "Tanks" (1280,720) (300,200)
+
+fr::Int
+fr = 60
+
+main :: IO ()
+main = do tank1         <- loadBMP "Pictures/Tanks/tank1.bmp"
+          tank2         <- loadBMP "Pictures/Tanks/tank2.bmp"
+          tank3         <- loadBMP "Pictures/Tanks/tank3.bmp"
+          tank4         <- loadBMP "Pictures/Tanks/tank4.bmp"
+          menuStart     <- loadBMP "Pictures/Menus/MenuStart2.bmp"
+          menuCM        <- loadBMP "Pictures/Menus/MenuCriaMapa.bmp"
+          menuJogar     <- loadBMP "Pictures/Menus/MenuJogar.bmp"
+          menuQJM       <- loadBMP "Pictures/Menus/MenuEscolhaJogador.bmp"
+          menuInvalidMM <- loadBMP "Pictures/Menus/MenuInvalidMM.bmp"
+          menuInvalidTA <- loadBMP "Pictures/Menus/MenuInvalidTA.bmp" 
+          menuFinalRT   <- loadBMP "Pictures/Menus/MenuFinalVitoriaR.bmp"
+          menuFinalMM   <- loadBMP "Pictures/Menus/MenuFinalVitoriaM.bmp"
+          pecaI         <- loadBMP "Pictures/Mapa/indestrutivel.bmp"
+          pecaD         <- loadBMP "Pictures/Mapa/destrutivel.bmp"
+          pecaV         <- loadBMP "Pictures/Mapa/PecaV.bmp"
+          tiroC1        <- loadBMP "Pictures/Tanks/TiroC1.bmp"
+          tiroC2        <- loadBMP "Pictures/Tanks/TiroC2.bmp"
+          tiroC3        <- loadBMP "Pictures/Tanks/TiroC3.bmp"
+          tiroC4        <- loadBMP "Pictures/Tanks/TiroC4.bmp"
+          tiroL1        <- loadBMP "Pictures/Tanks/laser2.bmp"
+          tiroL2        <- loadBMP "Pictures/Tanks/laser1.bmp"
+          tiroL3        <- loadBMP "Pictures/Tanks/laser3.bmp"
+          tiroL4        <- loadBMP "Pictures/Tanks/laser4.bmp"
+          choque1       <- loadBMP "Pictures/Tanks/Choque1.bmp"
+          choque2       <- loadBMP "Pictures/Tanks/Choque2.bmp"
+          choque3       <- loadBMP "Pictures/Tanks/Choque3.bmp"
+          choque4       <- loadBMP "Pictures/Tanks/Choque4.bmp"
+          pUpLaser      <- loadBMP "Pictures/ImagensPowerUps/laser.bmp"
+          pUpChoque     <- loadBMP "Pictures/ImagensPowerUps/Choque.bmp"
+          pUpTeleport   <- loadBMP "Pictures/ImagensPowerUps/teleport.bmp"
+          pUpVidas      <- loadBMP "Pictures/ImagensPowerUps/Vidas.bmp"
+          zero          <- loadBMP "Pictures/Counter/zero.bmp"
+          one           <- loadBMP "Pictures/Counter/one.bmp"
+          two           <- loadBMP "Pictures/Counter/two.bmp"
+          three         <- loadBMP "Pictures/Counter/three.bmp"
+          four          <- loadBMP "Pictures/Counter/four.bmp"
+          five          <- loadBMP "Pictures/Counter/five.bmp"
+          six           <- loadBMP "Pictures/Counter/six.bmp"
+          seven         <- loadBMP "Pictures/Counter/seven.bmp"
+          eight         <- loadBMP "Pictures/Counter/eight.bmp"
+          nine          <- loadBMP "Pictures/Counter/nine.bmp"
+          let 
+            imagesMenu = [menuStart, menuCM, menuJogar, menuQJM,menuInvalidMM,menuInvalidTA,menuFinalMM,menuFinalRT]
+            imagesJogo = [pecaI,pecaD,pecaV,tank1,tank2,tank3,tank4,tiroC1,tiroC2,tiroC3,tiroC4,tiroL1,tiroL2,tiroL3,tiroL4,choque1,choque2,choque3,choque4]
+            imagesPowerUps = [pUpLaser,pUpChoque,pUpTeleport,pUpVidas]
+            imagesTickCounter = [zero,one,two,three,four,five,six,seven,eight,nine]
+            estadoImagens = Imagens imagesMenu imagesJogo imagesPowerUps imagesTickCounter
+          play dm                 
+               (withBlue (0.3) blue)                                                
+               fr                                                          
+               (estadoI estadoImagens)                                                         
+               desenhaEstado                                                 
+               reageEvento                                                   
+               reageTempo 

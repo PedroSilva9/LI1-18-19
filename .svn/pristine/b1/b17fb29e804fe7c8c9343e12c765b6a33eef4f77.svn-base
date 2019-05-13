@@ -1,0 +1,138 @@
+-- | Este módulo define funções comuns da Tarefa 1 do trabalho prático.
+module Tarefa1_2018li1g027 where
+import Data.List
+import Data.Char
+import Matrizes
+import LI11819
+import TestesT1
+
+type Vetor = (Int,Int)
+
+-- * Testes
+
+testesT1 :: [Instrucoes]
+testesT1 = [[Move C,Move E,Move C,Move E,Move C,Move E,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move B,Move B,Desenha,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Desenha,Move C,Move D,Move D,Roda,Desenha,Move D,Move D,MudaTetromino,MudaTetromino,Move B,Move B,Desenha],[Roda,MudaTetromino,Desenha,Move B,Move B,Move B,Move D,Move D,Desenha,Roda,MudaTetromino,Move C,Move C,Move D,Move D,Move D,Move C,Desenha,MudaTetromino,Move B,Move B,Move B,Desenha,Move E,Move E,Move E,Move E,Move E,Move C,Desenha,Move B,Move B,Move B,Move B,Move B,Roda,MudaTetromino,Move D,Desenha,Move D,Move D,MudaTetromino,Desenha,Move D,Move D,MudaParede,Desenha],
+            [Move E, Move D, Move E, Move E, Move C, Move B, Move C, Move C, Desenha, MudaTetromino, Move D, Roda, MudaTetromino, MudaTetromino, Desenha, Move C, Move C, Move B, Move E, Move D, Move C, Move B, Move E, Move E, Desenha, MudaTetromino, Desenha, Move E, Move D, Roda, Roda,Desenha,Roda, Move E,MudaTetromino, MudaParede, Move B, MudaParede, MudaTetromino, Move B, Move C],[Move C, Move D, Move D, Move D, Move E, Move E, MudaTetromino, MudaParede, Move D, Move C, Move B, MudaParede, MudaTetromino, Move D , Desenha, Desenha, Move E, Move E, MudaTetromino, MudaTetromino, Move D, Move D, Move D, Move D, Move D, Move D, Move D, Move D, Desenha, Move C, Move D, Move E, Move B, Move B, Move C, Move E, Desenha],
+            [Desenha, Move B, Move B, MudaTetromino, Move C, Move B, MudaParede, MudaTetromino, Desenha, MudaTetromino, Roda, Roda, Desenha, Move B, Move B, Move E, Move E, Move C, Move D, Move C, Desenha, MudaTetromino, MudaTetromino, Desenha, MudaParede, Move C, Move C, Move C, Move D, Roda, Desenha, MudaParede, Roda, Roda, Move C, Move C, MudaTetromino, MudaParede, Desenha, MudaTetromino, Move B, Move D, Move E, MudaTetromino] , [Desenha, Move B, Move E, Move D, MudaParede, Move C,Desenha,MudaTetromino,Move B,Move B, Move D, Roda, Roda, Move E, Move C, Move B, Move C, Move C, Desenha, MudaTetromino, MudaParede, MudaParede, MudaTetromino, MudaParede, Move D, Move E, Move E, Move C, Move C, Move E, Move D, Move D, MudaTetromino, MudaParede, Move D,Move D, Move D, Desenha, Roda, Roda], 
+            [Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move B,Move B,Desenha,Desenha, MudaTetromino, Roda,Move C, Move B, Move C, Move C, Desenha, MudaTetromino, Move D, Roda,MudaParede,MudaParede,MudaTetromino, Move B, Move E, Move C, Desenha, MudaParede, MudaTetromino, Desenha, Move B, Move C, Move C, Move B, Move E, Move E, MudaParede, MudaTetromino, Desenha,Roda, Roda, Move E, Move D, Desenha, Roda, Move C, Move B, Desenha, Move B,Move C, MudaTetromino, MudaParede,MudaParede, Move B, Move E, Move D, Move B],[Desenha, Roda, Move C, Move E, Move C, Move B, Move E, Move E, Move E, Move D, Move B, Move E, Move D, Move E, Move B, Move C, Move E, Move E, Desenha, MudaTetromino, MudaTetromino, MudaParede, MudaParede, Desenha, Roda, Roda],
+            [Move B,Move C,Move C,Move D,Move D,Move B,Move C,MudaTetromino,Desenha, MudaTetromino, Roda, Roda, Desenha, Move B, Move B, Move C, Move C, Move B, Move E, Move E, MudaTetromino, Roda, Roda, Move E, Move B, Roda, MudaTetromino, Roda, Roda, Roda, MudaTetromino, MudaParede, Move C, Move D, Move B, Move B, Move B, Move B,MudaTetromino,MudaParede, MudaTetromino, Move B],[ Desenha, Roda, Move B, Move B, Move C, Move E, Move B, Desenha, MudaTetromino, MudaParede, MudaTetromino, Desenha, Roda, Move B, Move C, Move E, MudaParede, MudaParede, MudaTetromino, Move B,  Move C, Move B, Move E, Move E,  Move E, Move B, Move C, Move D, Move E, Roda, Roda, MudaTetromino, Desenha, Move C, Move C, Move B, Move E, Move D, Move C, MudaTetromino, MudaParede, Roda, Desenha, MudaParede ],
+            [Desenha, Move C, Move E,Move E, Move B, Move D, Move D, Move D, Desenha, MudaTetromino, MudaTetromino, MudaParede, Desenha, MudaTetromino, Move B, Move D, Move E, MudaTetromino, MudaParede, MudaTetromino, Desenha, Roda, Move B, Move C, Move E, MudaParede, MudaParede, MudaTetromino, Move B, Move C,Move D,Move C,Move B,Desenha,Move E,Move E,Move D,  Move D, Move E, Move B, Move C, Move E, Move E, Desenha, MudaTetromino, MudaTetromino, MudaParede, MudaParede],[ Move E, Move D, Desenha, Roda, Move C, Move B, Desenha, Desenha, Move B,Move D,Move D,Move D,Move C,Desenha,MudaTetromino,Move B,Move B, Desenha, Move B, Move C, Move C, Move B, Move E, Move E, MudaParede, MudaTetromino, Move E, Move E, Move E, Move E, Roda, Desenha, MudaTetromino, MudaParede, Move E, Move D, Roda, Move D, Move D, Move B, Move B, Move C],
+            [Desenha, MudaTetromino, Roda, Roda, Move B, Move C, Move C, Move B, Move E, MudaParede, Move C, Move D, Move B, Move B, Move B, Move B,MudaTetromino, Move D, MudaParede, MudaTetromino, Move D, Move C,Move D,Move C, Move C, Move C,Move C,Move C,Move C,Move B,Move C, Move B,Move B,Move B,Move B,Move B,Move B, MudaParede, MudaTetromino, Desenha ], [Desenha,Move E,Move E,Move D,  Move D, Move D, Move C, Move D, Roda, Roda, Move E, Move C, Move B, Move C, Move C, Desenha, MudaTetromino, Move B,Move D,Move D,Desenha,Roda,MudaTetromino,Move C,Move C,Move D,Move D,Move D,Move C,Desenha,MudaTetromino,Move B,Move B,Move B,Desenha,Move E,Move E,Move E,Move E,Move E,Move C,Desenha,Move B,Move B,Move B,Move B, Roda, Desenha, MudaTetromino], 
+            [Move C,MudaTetromino,Desenha, MudaTetromino, Roda, Roda, Desenha, Move B, Move B,Move D,Move D,Move E,Move E,Move E,Move E,Move D,Move D, MudaParede, Roda, Move D, Move C, Move C, Move C,Move D , MudaParede, MudaTetromino, Desenha,Move E,Move E,Move D, Move B, Move E, Move C, Desenha, MudaParede], [Desenha, MudaParede, MudaTetromino, Move D, Move D, Move E, Move C, Move C, Move C, Move C, Desenha, MudaTetromino, Move E, Move E, MudaTetromino, Desenha, Roda, Move D, Roda, Move E, Move E, Desenha, MudaParede, Move D, Move C, Move C, Move E, MudaTetromino, Desenha, Move E,Move E,Move E,Move E,Move E,Move C,Desenha, Move E, Move B, Move C, Move D, Move E, Roda, Roda, MudaTetromino, Desenha], 
+            [Move D,Move D,Move C,Move C,Move E,Roda,Move C,Move C,Move C,Move C,Move D,Move D,Move B,Move B,Move B,Move D,Move B,Move D,Move D,Move D,Move D,Move D,Move C,Desenha,Move E,Move E,Desenha,Move C,Move C,Desenha,Move E,Move E,Move E,Move E,Move E,Move E,Desenha,MudaTetromino,Move B,Move B,Move B,Move B,MudaTetromino,Move B,Move D,Move D,Move D,Desenha,Move E,Move E,Move E,Move E,Move C,Move C,Move C,Desenha,Move B,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move B,Move B,Move B,Desenha], [MudaParede,Move C,Move C,Move C,Desenha,Move D,Move D,Move E,Desenha,Move D,Move D,Desenha,MudaParede,Move B,Move B,Move B,Desenha,Move D,Move D,Move D,Desenha,Move B,Move B,Move B,Move B,Move B,MudaTetromino,Move D,Move B,Move C,Desenha,Move E,Move E,Move E,Move E,Move C,Desenha,Move E,Move E,Move E,Move C,Move C,Move C,Move B,Move D,Move C,Desenha,Move E,Move E,Move E,Move E,Move E,Desenha,MudaTetromino,Move C,Move C,Move C,Move C,Desenha,Move D,Move D,Desenha,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Desenha,Move D,Move D],
+            [Roda,Move C,Move C,Roda,Move E,Desenha,Move C,MudaTetromino,MudaTetromino,Move D,MudaTetromino,Move D,MudaTetromino,Move C,Roda,MudaTetromino,MudaTetromino,MudaParede,Desenha,Move D,Move D,Move E,Desenha,Move D,Move D,Roda,Move E,Roda,Roda,Roda,Roda,Desenha,Move B,Desenha,MudaParede,MudaTetromino,Move D,Move B,Move B,Move C,Desenha,Move C,Move C,Move C,Move C,Move C,Roda,Move E,Move E,Move E,Desenha],[MudaParede,Move C,Move C,Move C,Desenha,Move D,Move D,Move E,Desenha,Move D,Move D,Desenha,MudaParede,Move B,Move B,Move B,Desenha,Move D,Move D,Move D,Desenha,Move B,Move B,Move B,Move B,Move B,MudaTetromino,Move D,Move B,Move C,Desenha,Move E,Move E,Move E,Move E,Move C,Desenha,Move E,Move E,Move E,Move C,Move C,Move C,Move B,Move D,Move C,Desenha,Move E,Move E,Move E,Move E,Move E,Desenha,MudaTetromino,Move C,Move C,Move C,Move C,Desenha,Move D,Move D,Desenha,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Desenha,Move D,Move D],
+            [Desenha,Move C,Move C,MudaTetromino,MudaTetromino,MudaTetromino,Move D,Move B,MudaTetromino,Desenha,Roda,Roda,Move D,Move D,Move C,Roda,Move B,Desenha,Move B,Move B,Move B,Move B,Move B,Move E,Move E,Move E,Move D,Desenha,Move D,Roda,Move B,Desenha,MudaTetromino,MudaParede,Move C,Move C,MudaParede,Move D,MudaParede,Move D,Desenha,Move D,Desenha,Move D,Desenha,MudaParede,Move D,Move D,Move D,MudaTetromino,Move E,Desenha,Move C,Move C,Move C,Move D,Move D,Move D,Move D,Move B,Move B,Move B,Move B,Move B,Move E,Move E,Move E,Move D,Desenha,Move B,Move E,Move E,Move E,Move E,Desenha,Move D,Move B,Move B,Desenha,Move D,Move D,Roda,MudaTetromino,Desenha,Move D,Move D,MudaTetromino,Move D,MudaTetromino,Move C,Move C,Move D,Desenha,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move E,Move E,Move E,Move E,Desenha,Move D,Move D,MudaTetromino,Move D,Move B,Move C,Desenha,Move D,Desenha,Move D,MudaTetromino,MudaTetromino,MudaTetromino,MudaTetromino,MudaTetromino,MudaTetromino,Move D,Roda,Roda,Roda,Roda,Roda,Roda,Move B,Move E,Move E,Move D,Move B,Move E,Move E,Move E,Move E,Move E,Move E,Move D,Move D,Move E,Move E,Desenha,Move D,Move D,Move D,Move D,Move D,Move C,Desenha],
+            [Move D,Desenha,Move C,MudaTetromino,MudaTetromino,MudaTetromino,Desenha,Move D,Desenha,Move C,Move C,Move D,Desenha,Move C,Move C,Move C,Move B,Desenha,Move E,Move C,Move E,Move D,Desenha,Move E,Desenha,Move E,Move E,Move B,Desenha,Move B,Desenha,Move B,Move B,Move C,Move D,Move E,Move B,Desenha,Move D,Move D,Desenha,Move C,Move C,Desenha,Move B,Move E,Move E,Move E,Move E,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move E,Move E,Move B,Desenha,Move D,Move D,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move D,Move D,MudaTetromino,Move B,MudaParede,Desenha,Move B,Move B,Move B,Move B,Move B,MudaTetromino,MudaTetromino,Move B,Desenha,Move C,Move C,Move C,MudaParede,Move E,MudaTetromino,Move E,Move C,Move D,Desenha,Move E,Move E,Move E,Move D,MudaTetromino,Move D,Move C,MudaTetromino,MudaTetromino,Move E,MudaTetromino,MudaTetromino,Move D,Desenha,Move B,MudaTetromino,Move B,Move B,Move B,Desenha],
+            [Desenha,Move C,MudaTetromino,MudaTetromino,Move C,MudaTetromino,Move D,MudaTetromino,Move E,Move B,Move D,Desenha,Move D,Roda,Roda,MudaTetromino,Move D,MudaTetromino,MudaTetromino,Move E,Move E,Desenha,Move B,Move B,Move D,Move B,Move B,Move C,Desenha,MudaParede,MudaTetromino,Move D,Move D,Move B,Move B,Move E,Move E,Move E,Move E,Desenha,Move B,Move B,Move B,Move D,Move D,Move D,Move D,Move C,MudaTetromino,Move D,Move B,Desenha,Move D,Move D,Move D,Desenha,Move C,Move C,MudaTetromino,Move C,Move C,Desenha,Move C,Move C,Desenha,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,MudaTetromino,Move E,Move E,Move E,MudaParede,Move E,Desenha,Move B,Move B,Move B,Move B,Move B,Desenha,Move D,Move D,Roda,Move D,Roda,Move D,Roda,Move E,Roda,Move D,Roda,Move B,Roda,Desenha,Move C,Move C,Move C,Move C,Move C,Move C,Move B,Desenha,Move D,Move D,Move D,Move D,Move C,Move C,Move C,Move E,Move E,MudaTetromino,Move B,Move E,Move E,Move B,Move B,MudaTetromino,Move B,Move B,MudaTetromino,Move E,Move E,Roda,Move E,Move D,Move D,Move D,Move D,Move D,Move D,Desenha,Move D,Move D,Move D,Move C,Move C,Move C,Move C,Move E,Move E,MudaTetromino,Move E,Move E,Move E,Move D,Move D,Move D,Move D,Move B,Move B,Move B,Move E,Move B,Move C,Desenha,Move D,Move D,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move B,Move E,MudaTetromino,Move E,Move E,Move E,Move E,Roda,Move B,Move E,Desenha,Move D,MudaTetromino,Move D,Move D,Move D,Desenha,Move D,Move B,Move B,Move B,Move D,Move C,Move C,Move E,Desenha,Move B],
+            [MudaTetromino,Desenha,Move D,Move D,Move D,Desenha,Move C,Move C,Move C,MudaTetromino,Desenha,Move D,Move D,Move D,Move D,MudaTetromino,Move B,Move B,Move B,Desenha,Move C,Move C,Move C,Move C,Move C,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,MudaParede,Move D,Move E,Move D,Move D,Move D,Move D,Move E,Move E,Move E,Move E,Desenha,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Desenha,Move D,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Desenha,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Desenha,Move B,MudaParede],[Desenha,Move D,Move D,Move D,Desenha,MudaTetromino,Move D,Move D,Desenha,Move D,Move D,Move D,Move D,Move D,Move C,Move C,Move C,Move C,Desenha,Move E,Move E,Move E,MudaTetromino,Desenha,Move C,MudaParede,Move C,Move C,Roda,Move C,Move B,Move E,Move B,Desenha,Move D,Move D,Move D,Roda,Move D,Move D,Roda,Roda,Roda,Desenha,Move D,MudaParede,Move D,Move D,MudaTetromino,Move B,Move B,Move C,Desenha,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Desenha,Move B,Move B,Move D,Move D,Move D,Move D,Move D,Move B,Move B,Desenha,Move C,Move C,Move C,Move C,Move C,Move C,Move E,Move E,Desenha,Move D,Move D,Move D,Move D,Desenha,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move E,Move E,Move B,Move D,Move D,Move D,Move C,Move C,Move B,Desenha,Move D,Move D,Move C,Move C,Desenha],
+            [MudaTetromino,MudaTetromino,MudaParede,Desenha,Move E,Move C,Move C,Move C,Move C,MudaParede,Move E,Move E,Move E,MudaTetromino,Move B,Move B,Desenha,Move D,Move B,Move B,Move B,Move B,Move E,Move B,Desenha,Move E,Move E,Move E,Move B,Move B,Move B,Move B,Move D,Move D,Move D,Desenha,MudaTetromino,Move D,MudaTetromino,Move C,Desenha,Move E,Move E,Move E,Desenha,Move C,Move C,Move C,Move C,Desenha,Move C,Move C,Move C,Move C,Move C,Desenha,Move D,Move D,Move D,Move E,Desenha,Move B,Move B,Move B,Move B,Move B,Desenha,Move B,Move D,Move D,MudaTetromino,Move D,Move D,Move D,Move D,Move D,Move C,Move E,Move C,Desenha,Move D,Move B,Move B,Move B,Move E,Move E,Move C,MudaParede,Desenha,Move B,Move B,Move D,Move D,Move B,Move B,Move B,Desenha,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move E,Move B,Move C,Desenha,Move D],[Desenha,Move D,Roda,Desenha,Move D,Roda,Desenha,Move C,Move C,Move C,Move C,Move E,Move E,MudaTetromino,MudaTetromino,Move B,MudaTetromino,Move B,MudaParede,Desenha,Move D,Move D,Move D,Move D,Desenha,MudaParede,Move C,Move C,MudaTetromino,Move D,Desenha,Move E,Move E,Move E,Move E,Move E,Roda,Move E,Roda,Roda,Move E,Move E,Move D,Move B,Roda,Move C,Move D,Move E,MudaTetromino,MudaTetromino,Desenha,Move B,Move B,Move B,Move B,Move B,Move B,Move D,Move D,Move D,Desenha,Move D,Roda,Move D,Move B,Move C,Desenha,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move D,Move D,Desenha,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Roda,Move E,Desenha,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Roda,MudaTetromino,Move B,MudaTetromino,Move B,Move B,MudaTetromino,MudaTetromino,Move B,Desenha,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Desenha,Move C,Move C,Move C,Move C,Move C,Desenha,Move C,Move C,Move E,Move E,Move E,Move E,Move E,Move C,Move B,Move C,Move C,Move C,Move C,Move C,Move C,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move C,Move C,Move B,Move B,Move E,MudaTetromino,Move E,MudaTetromino,Move E,MudaTetromino,MudaTetromino,Move C,Desenha,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move C,Move D,Desenha,Move C,Move C,Move C,Move C,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move C,Move C,Move B,Desenha,Move D,Move D,Move D,Move D,Move D,Move C,Move C,Move C,Roda,Desenha,Move D,Move D,Move D,Move D,Desenha,Move B,Move B,Move B,Move B,Move E,Move E,Move E,Move E,Move E,Move B,Move B,Move B,Roda,MudaTetromino,Move E,Move E,Move E,Move B,MudaTetromino,Move E,MudaTetromino,Move B,Move B,Desenha,Move B,Move B,Move D,Move D,Move D,Move E,Move E,Move E,Desenha,Move D,Move C,Move C,Move C,Desenha,Move E,Move E,Move E,Move D,Move C,Move C,Move C,Move D,Move D,Move B,Move B,Move B],
+            [Roda,Desenha,Move B,Move B,Move B,Move B,Move B,Desenha,Move D,Move D,Move D,MudaTetromino,MudaTetromino,Move D,MudaTetromino,Move C,Move B,Desenha,Move B,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move C,Move D,Desenha,Move C,Move C,Move C,Move C,Move C,Desenha,Move D,Move D,Move D,Move D,Move D,Move D,Desenha,Move C,Move C,Move C,Move C,Move E,Move E,Move E,Move E,Move E,MudaTetromino,MudaTetromino,MudaTetromino,MudaTetromino,Move D,Move D,Move E,Desenha,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Desenha,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move D,Move D,Move C,MudaParede,Move C,Move E,Move E,MudaTetromino,Move C,Move C,Desenha,Move C,Move C,Move C,Move C,Roda,Roda,Move C,Move C,Desenha,Move B,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move C,Desenha,Move B,Move B,Roda,Move B,Move B,Roda,Move B,Move B,Desenha],[MudaTetromino,Move D,MudaTetromino,Move E,Move E,Desenha,Move D,Move D,Move D,Move D,MudaTetromino,Move D,Move D,Move D,Move B,Desenha,Move C,Move C,Move C,Move C,Move C,Move C,Desenha,Move E,Move E,Move E,MudaParede,Desenha,Move E,Move E,Desenha,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Move B,Desenha,Move D,Move D,Desenha,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move E,Move C,Move C,Move C,Move C,Move C,MudaTetromino,MudaParede,Desenha,Move B,Move B,Move B,Roda,Roda,Roda,Move B,Move B,Move C,Desenha,Move E,Move E,Move E,Move E,Move E,Move C,Move C,Move B,Move B,Desenha,Move C,Move C,Move C,Move C,Move C,Move C,Move B,Desenha,Move D,Move C,Move C,Move C,Move C,Move C,Move C,Move C,Move E,Move E,Move E,Move E,Move D,MudaTetromino,Move D,Move B,Desenha,Move D,Move D,Move D,Move D,Move D,Move D,Roda,Roda,Desenha,Move B,Move B,Move D,Move E,Move E,MudaTetromino,Move E,Roda,MudaTetromino,Roda,Move E,Move E,Move D,Desenha,Move B,Move B,Move B,Move B,Move B,Move D,Move D,Move D,Move D,Move D,Move D,Move D,Move C,Move C,Move C,Move C,Move D,Move D,Move D]]
+
+
+---- | Funções principais da Tarefa 1.
+
+-- | Aplica uma instrução num editor.
+--    * Move - move numa dada direção.
+--    * MudaTetromino - seleciona a peça seguinte (usar a ordem léxica na estrutura de dados),
+--       sem alterar os outros parâmetros.
+--    * MudaParede - muda o tipo de parede.
+--    * Desenha - altera o mapa para incluir o tetrómino atual, sem alterar os outros parâmetros.
+
+instrucao :: Instrucao -> Editor -> Editor
+instrucao (Move d) (Editor pos dir tet wall mapa) = Editor newP dir tet wall mapa
+  where 
+        (a,b) = direcaoParaVetor d
+        (x,y) = pos
+        newP = (a + x, b + y)
+instrucao Roda (Editor pos dir tet wall mapa) = Editor pos newD tet wall mapa
+  where 
+        newD = toEnum . (flip mod 4) . succ . fromEnum $ dir
+instrucao MudaTetromino (Editor pos dir tet wall mapa) = Editor pos dir newT wall mapa 
+  where
+        newT = toEnum . (flip mod 7) . succ . fromEnum $ tet
+instrucao MudaParede (Editor pos dir tet wall mapa) = Editor pos dir tet newWall mapa
+  where
+        newWall = toEnum . (flip mod 2) . succ . fromEnum $ wall
+instrucao Desenha (Editor pos dir tet wall mapa) = Editor pos dir tet wall newMapa
+  where
+        tetpos = targets pos $ rotateMatrix dir $ (!!) allM $ fromEnum tet
+        newMapa = desenha mapa wall tetpos
+
+{-
+instrucao :: Instrucao -> Editor -> Editor
+instrucao (Move d) e@Editor{posicaoEditor = p} = e{posicaoEditor = somaVetores p $ direcaoParaVetor d}
+instrucao Roda e@Editor{direcaoEditor = d} = e{direcaoEditor = toEnum . (flip mod 4) . succ . fromEnum $ d}
+instrucao MudaTetromino e@Editor{tetrominoEditor = t} = e{tetrominoEditor = toEnum . (flip mod 7) . succ . fromEnum $ t}
+instrucao Desenha e@Editor{mapaEditor = mapa, tetrominoEditor = tet, direcaoEditor = dir, paredeEditor = wall, posicaoEditor = pos} = let newMapa = desenha mapa wall $ targets pos $ rotateMatrix dir $ (!!) allM $ fromEnum tet
+                                                                                                                                     in e{mapaEditor = newMapa}
+-}
+-- | Aplica uma sequência de instruções num editor.
+-- | Deve chamar a função @instrucao@.
+instrucoes :: Instrucoes -> Editor -> Editor
+instrucoes t e = foldl (flip instrucao) e t
+
+-- | Cria um mapa inicial com paredes nas bordas e o resto vazio.
+mapaInicial :: Dimensao -> Mapa
+mapaInicial (l,c) = let mapa = map (\p -> (Bloco Indestrutivel) : p ++ [Bloco Indestrutivel]) $ mapaVazio (l-2, c-2)
+                    in parede : mapa ++ [parede] where
+    parede = replicate c $ Bloco Indestrutivel
+    mapaVazio :: Dimensao -> Mapa
+    mapaVazio (li,co) = replicate li $ replicate co Vazia
+
+rotateMatrix :: Direcao -> Matriz Bool -> Matriz Bool
+rotateMatrix C m = m
+rotateMatrix D m = transpose . reverse $ m
+rotateMatrix B m = reverse . transpose $ reverse . transpose $ m
+rotateMatrix E m = transpose . map reverse $ m
+
+direcaoParaVetor :: Direcao -> Vetor
+direcaoParaVetor C = (-1,0)
+direcaoParaVetor D = (0,1)
+direcaoParaVetor B = (1,0)
+direcaoParaVetor E = (0,-1)
+
+
+somaVetores :: Vetor -> Vetor -> Vetor
+somaVetores (a,b) (x,y) = (a+x, b+y)
+
+-- | Cria um editor inicial, usando a peça I indestrutível voltada para cima.
+-- | Deve chamar as funções @mapaInicial@, @dimensaoInicial@, e @posicaoInicial@.
+editorInicial :: Instrucoes -> Editor
+editorInicial i =  Editor (posicaoInicial i) C I Indestrutivel (mapaInicial . dimensaoInicial $ i)
+
+targets :: Posicao -> Matriz Bool -> [Posicao]
+targets _ [] = []
+targets (l,c) (h:t) = target (l,c) h ++ targets (l+1,c) t
+
+target :: Posicao -> [Bool] -> [Posicao]
+target _ [] = []
+target (l,c) (h:t) | h = (l,c) : target (l,c+1) t 
+                   | not h =  target (l,c+1) t
+
+atualizaIndiceLista :: Int -> a -> [a] -> [a]
+atualizaIndiceLista _ _ [] = [] 
+atualizaIndiceLista 0 e (_:t) = e : t
+atualizaIndiceLista i e (h:t) = h : atualizaIndiceLista (i-1) e t
+
+atualizaPosicaoMatriz :: Posicao -> a -> Matriz a -> Matriz a
+atualizaPosicaoMatriz (0, y) a (h:t) = atualizaIndiceLista y a h : t
+atualizaPosicaoMatriz (x, y) a (h:t) = h : atualizaPosicaoMatriz (x-1, y) a t
+atualizaPosicaoMatriz _ _ [] = []
+
+desenha :: Mapa -> Parede -> [Posicao] -> Mapa
+desenha m _ [] = m
+desenha m wall (h:t) = desenha (atualizaPosicaoMatriz h (Bloco wall) m) wall t
+
+-- | Constrói um @Mapa@ dada uma sequência de @Instrucoes@.
+-- | Deve chamar as funções @instrucoes@ e @editorInicial@.
+constroi :: Instrucoes -> Mapa
+constroi i = mapaEditor . (instrucoes i) .  editorInicial $ i
+
+printMapa m = mapM_ print stringMap
+  where
+    stringMap = map (map pecaToChar) m
+    pecaToChar Vazia = '.'
+    pecaToChar (Bloco Destrutivel) = 'D'
+    pecaToChar (Bloco Indestrutivel) = 'P'
+
+pm = printMapa . constroi

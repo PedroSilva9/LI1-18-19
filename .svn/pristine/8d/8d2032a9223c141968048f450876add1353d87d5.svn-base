@@ -1,0 +1,42 @@
+module Typos where
+
+import LI11819
+import Graphics.Gloss.Interface.Pure.Game (Picture)
+import System.Random (StdGen)
+
+data EstadoGloss = EstadoGloss
+    { estado         :: Estado
+    , editor         :: Editor
+    , menu           :: Bool            -- ^ Verifica se está no menu ou dentro do jogo
+    , imagens        :: Imagens         -- ^Imagens usadas em todas as fases do jogo
+    , nJog           :: Int             -- ^Numero de jogadores
+    , tMenu          :: Picture         -- ^Picture do menu em que está
+    , acoesMapa      :: [Instrucao]     -- ^Mundancas que ocorrem na construcao do mapa
+    , criaMapa       :: Bool            -- ^Verifica se está ou não na fase de criar um mapa
+    , powerups       :: [Powerup]       -- ^Conjunto dos powerups presentes no mapa
+    , powerUpCounter :: Int             -- ^Tempo de intervalo entre a geração de powerups
+    , rnd            :: StdGen
+    , empty          :: [PosicaoGrelha] -- ^Posições do mapa vazias
+    , tickCounter    :: Int             -- ^Conjunto de caracteres no contador de ticks
+    , windowSize     :: (Int,Int)
+    , botIndex       :: [Int]           -- ^Indice dos jogadores que são bot
+    , winner         :: Int
+    }
+
+data Imagens = Imagens
+    { imagensMenu        :: [Picture]
+    , imagensJogo        :: [Picture]
+    , imagensPowerUps    :: [Picture]
+    , imagensTickCounter :: [Picture]
+    }
+
+data Powerup
+    = PowerupVida
+        { posicaoPowerUp :: PosicaoGrelha }
+    | PowerupTeleport
+        { posicaoPowerUp :: PosicaoGrelha }
+    | PowerupLasers
+        { posicaoPowerUp :: PosicaoGrelha }
+    | PowerupChoques
+        { posicaoPowerUp :: PosicaoGrelha }
+  deriving (Read,Show,Eq)

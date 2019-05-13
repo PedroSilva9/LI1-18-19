@@ -1,0 +1,167 @@
+module ReageEvento where
+
+import LI11819
+import Typos
+import EstadoInicial (estadoI)
+import MapasDefault (defaultMaps)
+import DesenhaJogo (checkPosVazia,posTank)
+import Tarefa1_2018li1g027 (constroi,instrucao,editorInicial)
+import Tarefa2_2018li1g027 (jogada)
+import Tarefa4_2018li1g027 (asSqr)
+import Data.Maybe (fromJust)
+import Data.List (elemIndex,nub,(\\))
+import System.Random (mkStdGen)
+import Graphics.Gloss.Interface.Pure.Game
+
+reageEvento :: Event -> EstadoGloss -> EstadoGloss
+reageEvento f estado | menu estado     = if winner estado >= 0
+                                            then reageEventoMenu f estado{tMenu = (imagensMenu . imagens $ estado) !! (winner estado + 6)}
+                                            else reageEventoMenu f estado
+                     | criaMapa estado = reageEventoCriaMapa f estado
+                     | otherwise       = reageEventoJogo f estado
+
+reageEventoMenu :: Event -> EstadoGloss -> EstadoGloss
+reageEventoMenu event e = reageEventoMenuAux event e (tMenu e) (imagensMenu . imagens $ e)
+
+reageEventoMenuAux :: Event -> EstadoGloss -> Picture -> [Picture] -> EstadoGloss
+reageEventoMenuAux (EventKey (SpecialKey KeyUp) Down _ _) e pic img = case elemIndex pic img of
+                                                                        Just 1  -> e{tMenu = img !! 2}
+                                                                        Just 2  -> e{tMenu = img !! 1}
+                                                                        Just 4  -> e{tMenu = img !! 5}
+                                                                        Just 10 -> e{tMenu = img !! 6}
+                                                                        Just 11 -> e{tMenu = img !! 7}
+                                                                        Just 12 -> e{tMenu = img !! 8}
+                                                                        Just 13 -> e{tMenu = img !! 9}
+                                                                        _ -> e
+
+reageEventoMenuAux (EventKey (SpecialKey KeyDown) Down _ _) e pic img = case elemIndex pic img of
+                                                                          Just 1 -> e{tMenu = img !! 2}
+                                                                          Just 2 -> e{tMenu = img !! 1}
+                                                                          Just 5 -> e{tMenu = img !! 4}
+                                                                          Just 6 -> e{tMenu = img !! 10,winner = -1}
+                                                                          Just 7 -> e{tMenu = img !! 11,winner = -1}
+                                                                          Just 8 -> e{tMenu = img !! 12,winner = -1}
+                                                                          Just 9 -> e{tMenu = img !! 13,winner = -1}
+                                                                          _ -> e
+
+reageEventoMenuAux (EventKey (SpecialKey KeyEnter) Down _ _) e pic img = case elemIndex pic img of
+                                                                           Just 1  -> e{criaMapa = True,menu = False}
+                                                                           Just 2  -> e{tMenu = img !! 14}
+                                                                           Just 0  -> e{tMenu = img !! 1}
+                                                                           Just 4  -> estadoI $ imagens e
+                                                                           Just 6  -> estadoI $ imagens e
+                                                                           Just 7  -> estadoI $ imagens e
+                                                                           Just 8  -> estadoI $ imagens e
+                                                                           Just 9  -> estadoI $ imagens e
+                                                                           Just 10 -> resetGame e
+                                                                           Just 11 -> resetGame e
+                                                                           Just 12 -> resetGame e
+                                                                           Just 13 -> resetGame e
+                                                                           Just 5  -> e{criaMapa = True, menu = False,acoesMapa = [], editor = instrucao Desenha $ editorInicial []}
+                                                                           _ -> e
+reageEventoMenuAux (EventKey key Down _ _) e pic img | elem key numeroJogador && (pic == img !! 3) = if verifyValidMap e (changePlrEstado e) then estadoValido else estadoInvalido
+                                                     | elem key dMaps && (pic == img !! 14) = e{estado = Estado (constroi $ defaultMaps !! fromJust (elemIndex key dMaps)) [] [], tMenu = img !! 3,tickCounter = 0,acoesMapa = defaultMaps !! fromJust (elemIndex key dMaps)}
+  where
+    estadoInvalido = e{menu=True, tMenu = img !! 5}
+    numeroJog      = fromJust (elemIndex key numeroJogador) + 1
+    botList        = take (4 - numeroJog) [3,2,1,0]
+    estadoValido   = e{estado = changePlrEstado e,menu = False,criaMapa = False,nJog = 4,tickCounter = 0,botIndex = botList,winner = -1}
+reageEventoMenuAux (EventResize newWinSize) e pic img = e{windowSize = verifyWindowSize newWinSize}
+reageEventoMenuAux _ e _ _ = e
+
+numeroJogador = [Char '1',Char '2',Char '3',Char '4']
+dMaps         = [Char '1',Char '2',Char '3',Char '4',Char '5',Char '6']
+
+reageEventoCriaMapa :: Event -> EstadoGloss -> EstadoGloss
+reageEventoCriaMapa (EventKey (SpecialKey KeyRight) Down _ _) e = changeMap e $ Move D
+reageEventoCriaMapa (EventKey (SpecialKey KeyLeft) Down _ _) e  = changeMap e $ Move E
+reageEventoCriaMapa (EventKey (SpecialKey KeyUp) Down _ _) e    = changeMap e $ Move C
+reageEventoCriaMapa (EventKey (SpecialKey KeyDown) Down _ _) e  = changeMap e $ Move B
+reageEventoCriaMapa (EventKey (Char 'd') Down _ _) e            = changeMap e Desenha
+reageEventoCriaMapa (EventKey (Char 't') Down _ _) e            = changeMap e MudaTetromino
+reageEventoCriaMapa (EventKey (Char 'p') Down _ _) e            = changeMap e MudaParede
+reageEventoCriaMapa (EventKey (Char 'r') Down _ _) e            = changeMap e Roda
+reageEventoCriaMapa (EventKey (SpecialKey KeyEnter) Down _ _) e = e{estado = Estado{mapaEstado = constroi .acoesMapa $ e,jogadoresEstado = [],disparosEstado =[]}, tMenu = (imagensMenu . imagens $ e) !! 3,menu = True, criaMapa = False,tickCounter = 0}
+reageEventoCriaMapa (EventResize newWinSize) e                  = e{windowSize = verifyWindowSize newWinSize}
+reageEventoCriaMapa _ e = e
+
+changeMap :: EstadoGloss -> Instrucao -> EstadoGloss
+changeMap e@EstadoGloss{editor = edit, acoesMapa = acoes} instrucao = e{editor = newEditor, acoesMapa = newAcoes}
+  where
+    newEditor = edit{mapaEditor = constroi $ acoes ++ [instrucao,Desenha]}
+    newAcoes  = acoes ++ [instrucao]
+
+reageEventoJogo :: Event -> EstadoGloss -> EstadoGloss
+reageEventoJogo (EventKey key Down _ _) e | key `elem` moveB  = changeJogadaEstado e (fromJust $ elemIndex key moveB) (Movimenta B)
+                                          | key `elem` moveC  = changeJogadaEstado e (fromJust $ elemIndex key moveC) (Movimenta C)
+                                          | key `elem` moveD  = changeJogadaEstado e (fromJust $ elemIndex key moveD) (Movimenta D)
+                                          | key `elem` moveE  = changeJogadaEstado e (fromJust $ elemIndex key moveE) (Movimenta E)
+                                          | key `elem` canhao = changeJogadaEstado e (fromJust $ elemIndex key canhao) (Dispara Canhao)
+                                          | key `elem` lasers = changeJogadaEstado e (fromJust $ elemIndex key lasers) (Dispara Laser)
+                                          | key `elem` choque = changeJogadaEstado e (fromJust $ elemIndex key choque) (Dispara Choque)
+                                          | otherwise = e
+reageEventoJogo(EventResize newWinSize) e  = e{windowSize = verifyWindowSize newWinSize}
+reageEventoJogo _ e = e
+
+moveB  = [Char 's' ,SpecialKey KeyDown  ,Char 'k' ,Char '5']
+moveC  = [Char 'w' ,SpecialKey KeyUp    ,Char 'i' ,Char '8']
+moveD  = [Char 'd' ,SpecialKey KeyRight ,Char 'l' ,Char '6']
+moveE  = [Char 'a' ,SpecialKey KeyLeft  ,Char 'j' ,Char '4']
+canhao = [Char '1' ,Char ','            ,Char 'o' ,Char '0']
+lasers = [Char '2' ,Char '.'            ,Char 'p' ,Char '7']
+choque = [Char '3' ,Char '-'            ,Char '+' ,Char '9']
+
+changeJogadaEstado :: EstadoGloss -> Int -> Jogada -> EstadoGloss
+changeJogadaEstado e a jog = e{estado = newest}
+--if fst $ checkVitoria e{estado = newest}
+                                --then e{menu = True, tMenu = (imagensMenu . imagens $ e) !! (winner + 6) }
+                                --else e{estado = newest}
+  where
+    est    = estado e
+    botind = botIndex e
+    newest = if a > (pred . length . jogadoresEstado $ est) || elem a botind
+                then est
+                else jogada a jog est
+    --winner = snd $ checkVitoria e{estado = newest}
+
+resetGame :: EstadoGloss -> EstadoGloss
+resetGame e = e{estado = newEstado, menu = False, powerups = [], powerUpCounter = 0,empty = [] , rnd = mkStdGen 5,tickCounter = 0,winner = -1}
+  where
+    jogList   = jogadoresEstado . estado $ e
+    newest    = Estado (constroi . acoesMapa $ e) jogList []
+    newEstado = changePlrEstado e{estado = newest}
+
+verifyValidMap :: EstadoGloss -> Estado -> Bool
+verifyValidMap estGloss est = length posJogSemRepeticoes == length posJog || overlapJogPos
+  where
+    mapa                = mapaEstado . estado $ estGloss
+    emptyPosList        = checkPosVazia mapa
+    listJog             = jogadoresEstado est
+    posJog              = map posicaoJogador listJog
+    posJogSemRepeticoes = nub posJog
+    overlapJogPos       = deleteOverlapPos posJogSemRepeticoes
+
+deleteOverlapPos :: [Posicao] -> Bool
+deleteOverlapPos l = any (aux l) l
+  where
+    aux :: [Posicao] -> Posicao -> Bool
+    aux posl h = any (flip elem asSqrPos) nposl
+      where
+        nposl = posl \\ [h]
+        asSqrPos = asSqr h
+
+changePlrEstado :: EstadoGloss -> Estado
+changePlrEstado e = Estado mapa newjogList dispList
+    where
+      (Estado mapa jogList dispList) = estado e
+      newjogList                     = posTank e
+
+-- Funciona mas nao da maneira que se quer
+verifyWindowSize :: (Int,Int)-> (Int,Int)
+verifyWindowSize (a,b) | currentSize < minSize = (1280,720)
+                       | currentSize > maxSize = (1920,1080)
+                       | otherwise = (a,b)
+  where
+    minSize = 1280 / 720
+    maxSize = 1920 / 1080
+    currentSize = fromIntegral a / fromIntegral b

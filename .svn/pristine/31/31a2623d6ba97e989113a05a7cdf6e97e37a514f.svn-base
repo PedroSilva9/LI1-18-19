@@ -1,0 +1,137 @@
+-- | Este módulo define funções comuns da Tarefa 2 do trabalho prático.
+module Tarefa2_2018li1g027 where
+
+import Tarefa1_2018li1g027
+import LI11819
+import Data.List
+
+-- * Testes
+
+-- | Testes unitários da Tarefa 2.
+--
+-- Cada teste é um triplo (/identificador do 'Jogador'/,/'Jogada' a efetuar/,/'Estado' anterior/).
+testesT2 :: [(Int,Jogada,Estado)]
+testesT2 = []
+
+-- * Funções principais da Tarefa 2.
+
+ticks :: Ticks
+ticks = 5
+
+posGrelhaParaPos :: PosicaoGrelha -> Direcao -> [Posicao]
+posGrelhaParaPos (li,co) dir | dir == C || dir == B = [(li,co), (li, succ co)]
+                             | otherwise = [(li,co), (succ li, co)]
+
+nextMovePos :: [Posicao] -> Direcao -> [Posicao]
+nextMovePos l dir | dir == C || dir == E = map (somaVetores $ dir2vec dir) l
+                  | otherwise            = map (somaVetores $ (\(x,y) -> (2*x,2*y)) $ dir2vec dir) l
+                  
+isEmpty :: Mapa -> [Posicao] -> [Bool]
+isEmpty m pos = map (f m) pos
+  where
+    f :: Mapa -> Posicao -> Bool
+    f mapa (li, co) = Vazia == (flip (!!) co $ head . drop li $ mapa)
+
+canMove :: Mapa -> PosicaoGrelha -> Direcao -> Bool
+canMove m pos dir = all id listaBool 
+  where
+    posicoesIniciais = posGrelhaParaPos pos dir
+    posicoesFinais = nextMovePos posicoesIniciais dir
+    listaBool = isEmpty m posicoesFinais
+
+movimenta :: Direcao -> Mapa -> Jogador -> [PosicaoGrelha] -> Jogador
+movimenta dir m (Jogador pos dirj v l c) allPlayerPos | dir /= dirj = (Jogador pos dir v l c)
+                                                      | otherwise = if (canMove m pos dirj) && not (elem newP allPlayerPos)
+                                                                       then (Jogador newP dir v l c)
+                                                                       else (Jogador pos dir v l c)
+  where
+    newP = somaVetores pos $ dir2vec dir
+
+--Posicoes que foram afetadas pelos choques
+posAfetadasPorChoques :: PosicaoGrelha -> Mapa -> [Posicao]
+posAfetadasPorChoques (li,co) mapa = [(l,c) | l <- [linhaI..linhaF], c <- [colunaI..colunaF]]
+  where
+    linhaI = if (li - 2) < 0 then 0 else li -2
+    linhaF = if (li + 3) < (length mapa) - 1 then li +3 else pred $ length mapa
+    colunaI = if (co - 2) < 0 then 0 else co -2
+    colunaF = if (co + 3) < (length $ head mapa) -1 then co +3 else pred $ length $ head mapa
+
+--Indice dos jogadores que emitiram choques
+indiceDisparoChoque :: [Disparo] -> [Int]
+indiceDisparoChoque disparos = let choques = filter (\e -> case e of {DisparoChoque{} -> True; _ -> False}) disparos
+                               in map jogadorDisparo choques  
+
+--Posicao dos jogadores que emitiram choques
+posicaoJogadorChoque :: [Jogador] -> [Int] -> [PosicaoGrelha]
+posicaoJogadorChoque player indices = let jogadoresChoque = map ((!!) player) indices
+                                       in map posicaoJogador jogadoresChoque
+
+--recebe o estado e implementa o novo estado do jogador
+replacePlayerEstado :: Estado -> Jogador -> Int -> Estado
+replacePlayerEstado e@Estado{jogadoresEstado=playersEstado} player indice = let newPlayersEstado = replace indice player playersEstado
+                                                                            in e{jogadoresEstado = newPlayersEstado}
+
+replaceDirEstado :: Estado -> Jogador -> Int -> Direcao -> Estado
+replaceDirEstado e@Estado{jogadoresEstado=playerEstado} (Jogador p d v l c) indice dir = let newDirPlayer = (Jogador p dir v l c)
+                                                                                             newPlayersEstado = replace indice newDirPlayer playerEstado
+                                                                                          in e{jogadoresEstado = newPlayersEstado}
+
+
+replace :: Int -> a -> [a] -> [a]
+replace _ _ [] = []
+replace n newVal (x:xs) | n == 0 = newVal:xs
+                        | otherwise = x:replace (n-1) newVal xs
+
+verificaMunicao :: Arma -> Jogador -> Bool
+verificaMunicao weapon player | weapon == Canhao || weapon == Laser = lasersJogador player > 0
+                              | otherwise = choquesJogador player > 0
+
+removeMunicao :: Arma -> Jogador -> Jogador
+removeMunicao Choque j@Jogador{choquesJogador=x} = let newChoquesJ = pred x
+                                                    in j{choquesJogador=newChoquesJ}
+removeMunicao _ j@Jogador{lasersJogador=y} = let newLaserJ = pred y
+                                              in j{lasersJogador=newLaserJ}
+
+addDisparo :: Arma -> Estado -> Int -> PosicaoGrelha -> Direcao -> Estado
+addDisparo Canhao e@Estado{disparosEstado=disp} pIndice pPos pDir = let shotPos = somaVetores pPos $ dir2vec pDir
+                                                                        newlistaDisparos = (DisparoCanhao pIndice shotPos pDir) : disp 
+                                                                     in e{disparosEstado = newlistaDisparos}
+addDisparo Laser e@Estado{disparosEstado=disp} pIndice pPos pDir  = let shotPos = somaVetores pPos $ dir2vec pDir
+                                                                        newlistaDisparos = (DisparoLaser pIndice shotPos pDir) : disp
+                                                                     in e{disparosEstado = newlistaDisparos}
+addDisparo Choque e@Estado{disparosEstado=disp} pIndice _ _       = let newlistaDisparos = (DisparoChoque pIndice ticks) : disp
+                                                                     in e{disparosEstado = newlistaDisparos}
+                                                                      
+-- | Efetua uma jogada.
+jogada :: Int -- ^ O identificador do 'Jogador' que efetua a jogada.
+       -> Jogada -- ^ A 'Jogada' a efetuar.
+       -> Estado -- ^ O 'Estado' anterior.
+       -> Estado -- ^ O 'Estado' resultante após o jogador efetuar a jogada.
+
+jogada playerIndice (Movimenta dir) estado = if any id (map (flip elem afectedPos) squareTank) -- Jogador está numa posicao de choque? 
+                                                then if (dir == playerDir)  -- A direcao do jogador é a mesma do que a da jogada?
+                                                        then estado -- Se sim, como não pode andar fica igual
+                                                        else replaceDirEstado estado player playerIndice dir -- Caso contrário muda a direcao do Jogador
+                                                else replacePlayerEstado estado (movimenta dir (mapaEstado estado) player allPlayerPos) playerIndice -- Como nao esta numa posicao de choque pode mover
+  where
+    player        = flip (!!) playerIndice . jogadoresEstado $ estado -- Jogador atual
+    playerDir     = direcaoJogador player -- Direcao do Jogador
+    playerPos     = posicaoJogador player -- Posicao do Jogador
+    mapa          = mapaEstado estado --mapa
+    allPlayerPos  = filter (\(a,b) -> (a,b) /= playerPos) (map posicaoJogador (jogadoresEstado estado))
+    squareTank    = (\(a,b) -> [(a,b),(a,b+1),(a+1,b),(a+1,b+1)]) playerPos
+    choquePosList = posicaoJogadorChoque (jogadoresEstado estado) (indiceDisparoChoque . disparosEstado $ estado) --posicao dos jogadoes que emitiram choque
+    afectedPos    = nub . concat $ map (flip posAfetadasPorChoques mapa) choquePosList --todas as posições afetadas por choque num mapa
+
+jogada playerIndice (Dispara arma) estado 
+    | arma == Canhao || arma == Laser = if (verificaMunicao arma player)
+                                           then estadoAfterShot
+                                           else estado
+    | arma == Choque = estadoAfterShot
+  where
+    player          = flip (!!) playerIndice . jogadoresEstado $ estado -- Jogador atual
+    playerDir       = direcaoJogador player -- Direcao do Jogador
+    playerPos       = posicaoJogador player -- Posicao do Jogado
+    mapa            = mapaEstado estado --mapa
+    newPlayerEst    = replacePlayerEstado estado (removeMunicao arma player) playerIndice -- Atualiza o estado na componente jogadores com o jogador X sem menos 1 municaoaa
+    estadoAfterShot = addDisparo arma newPlayerEst playerIndice playerPos playerDir

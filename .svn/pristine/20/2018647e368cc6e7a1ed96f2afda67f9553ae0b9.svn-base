@@ -1,0 +1,182 @@
+-- | Este módulo define funções comuns da Tarefa 5 do trabalho prático.
+module Main where
+import Graphics.Gloss
+import LI11819
+import Graphics.Gloss.Interface.Pure.Game
+import Graphics.Gloss.Data.Picture
+import Graphics.Gloss.Data.Bitmap
+import Tarefa3_2018li1g027
+import Tarefa2_2018li1g027
+import Tarefa1_2018li1g027
+-- | Função principal da Tarefa 5.
+--
+-- __NB:__ Esta Tarefa é completamente livre. Deve utilizar a biblioteca <http://hackage.haskell.org/package/gloss gloss> para animar o jogo, e reutilizar __de forma completa__ as funções das tarefas anteriores.
+
+data EstadoGloss = EstadoGloss{
+                        menu :: Bool, -- ^ Verifica se está no menu ou dentro do jogo
+                        imagens :: [[Picture]], -- ^Imagens usadas no mapa
+                        nJog :: Int, -- ^Numero de jogadores
+                        tMenu :: Picture, -- ^Picture do menu em que está
+                        acoesMapa :: [Instrucao],
+                        mapa :: Mapa,
+                        criaMapa :: Bool 
+                       } 
+
+
+estadoI :: [[Picture]] -> EstadoGloss
+estadoI a = EstadoGloss { menu = True,imagens = a, nJog = 1, tMenu = (head a) !! 0, acoesMapa = [],mapa = [[Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel]],criaMapa = False}
+
+reageEvento :: Event -> EstadoGloss -> EstadoGloss
+reageEvento f estado = if menu estado then reageEventoMenu f estado else reageEventoCriaMapa f estado 
+
+reageEventoMenu :: Event -> EstadoGloss -> EstadoGloss
+reageEventoMenu (EventKey (SpecialKey KeyUp) Down _ _) e | tMenu e == head (imagens e) !! 1 = e {tMenu = head (imagens e) !! 2} 
+                                                         | tMenu e == head (imagens e) !! 2 = e {tMenu = head (imagens e) !! 1} 
+
+reageEventoMenu (EventKey (SpecialKey KeyDown) Down _ _) e | tMenu e == head (imagens e) !! 1 = e {tMenu = head (imagens e) !! 2} 
+                                                           | tMenu e == head (imagens e) !! 2 = e {tMenu = head (imagens e) !! 1}
+                                                          
+reageEventoMenu (EventKey (SpecialKey KeyRight) Down _ _) e | tMenu e == head (imagens e) !! 3 = e {tMenu = head (imagens e) !! 7}
+                                                            | tMenu e == head (imagens e) !! 4 = e {tMenu = head (imagens e) !! 8}
+                                                            | tMenu e == head (imagens e) !! 5 = e {tMenu = head (imagens e) !! 9}
+                                                            | tMenu e == head (imagens e) !! 6 = e {tMenu = head (imagens e) !! 10} 
+                                                            | tMenu e == head (imagens e) !! 7 = e {tMenu = head (imagens e) !! 8}
+                                                            | tMenu e == head (imagens e) !! 8 = e {tMenu = head (imagens e) !! 9}
+                                                            | tMenu e == head (imagens e) !! 9 = e {tMenu = head (imagens e) !! 10}
+                                                            | tMenu e == head (imagens e) !! 10 = e {tMenu = head (imagens e) !! 7}
+                                                            
+                                                                                                                                                                                                                                                
+reageEventoMenu (EventKey (SpecialKey KeyLeft) Down _ _) e | tMenu e == head (imagens e) !! 3 = e {tMenu = head (imagens e) !! 11}
+                                                           | tMenu e == head (imagens e) !! 4 = e {tMenu = head (imagens e) !! 12}
+                                                           | tMenu e == head (imagens e) !! 5 = e {tMenu = head (imagens e) !! 13}
+                                                           | tMenu e == head (imagens e) !! 6 = e {tMenu = head (imagens e) !! 14} 
+                                                           | tMenu e == head (imagens e) !! 11 = e {tMenu = head (imagens e) !! 14}
+                                                           | tMenu e == head (imagens e) !! 14 = e {tMenu = head (imagens e) !! 13}
+                                                           | tMenu e == head (imagens e) !! 13 = e {tMenu = head (imagens e) !! 12}
+                                                           | tMenu e == head (imagens e) !! 12 = e {tMenu = head (imagens e) !! 11}
+                                                                                                                      
+reageEventoMenu (EventKey (SpecialKey KeyEnter) Down _ _) e | tMenu e == head (imagens e) !! 7 = e {tMenu = head (imagens e) !! 3,nJog = 1}
+                                                            | tMenu e == head (imagens e) !! 8 = e {tMenu = head (imagens e) !! 4,nJog = 2}
+                                                            | tMenu e == head (imagens e) !! 9 = e {tMenu = head (imagens e) !! 5,nJog = 3}  
+                                                            | tMenu e == head (imagens e) !! 10 = e {tMenu = head (imagens e) !! 6,nJog = 4}  
+                                                            | tMenu e == head (imagens e) !! 11 = e {tMenu = head (imagens e) !! 3,nJog = 1}
+                                                            | tMenu e == head (imagens e) !! 12 = e {tMenu = head (imagens e) !! 4,nJog = 2}
+                                                            | tMenu e == head (imagens e) !! 13 = e {tMenu = head (imagens e) !! 5,nJog = 3}
+                                                            | tMenu e == head (imagens e) !! 14 = e {tMenu = head (imagens e) !! 6,nJog = 4} -- Dar enter e mudar o numero de jogadores
+                                                            | tMenu e == head (imagens e) !! 1 = e {criaMapa = True,menu = False}
+                                                            | tMenu e == head (imagens e) !! 0 = e {tMenu = head (imagens e) !! 1} -- Menu Introducao -> Menu texto da introducao
+                                                            
+
+reageEventoMenu (EventKey (Char 'h') Down _ _) e | tMenu e == (last . head $ imagens e) = e {tMenu = head (imagens e) !! 0}
+                                                 | tMenu e == head (imagens e) !! 4 = e {tMenu = head (imagens e) !! 3}
+                                                 | tMenu e == head (imagens e) !! 5 = e {tMenu = head (imagens e) !! 3}
+                                                 | tMenu e == head (imagens e) !! 6 = e {tMenu = head (imagens e) !! 3}
+                                                 | tMenu e == head (imagens e) !! 7 = e {tMenu = head (imagens e) !! 3}
+
+reageEventoMenu _ e = e
+
+
+reageTempo :: Float -> EstadoGloss -> EstadoGloss 
+reageTempo n estado = estado
+
+desenhaEstado :: EstadoGloss -> Picture
+desenhaEstado e =if menu e then desenhaMenu e else if criaMapa e then desenhaCriaMapa (mapa e) e else desenhaMenu e
+
+desenhaMenu :: EstadoGloss -> Picture
+desenhaMenu e | tMenu e == head (imagens e) !! 0 = head (imagens e) !! 0
+              | tMenu e == head (imagens e) !! 1 = head (imagens e) !! 1
+              | tMenu e == head (imagens e) !! 2 = head (imagens e) !! 2
+              | tMenu e == head (imagens e) !! 3 = head (imagens e) !! 3
+              | tMenu e == head (imagens e) !! 4 = head (imagens e) !! 4
+              | tMenu e == head (imagens e) !! 5 = head (imagens e) !! 5
+              | tMenu e == head (imagens e) !! 6 = head (imagens e) !! 6
+              | tMenu e == head (imagens e) !! 7 = head (imagens e) !! 7
+              | tMenu e == head (imagens e) !! 8 = head (imagens e) !! 8  
+              | tMenu e == head (imagens e) !! 9 = head (imagens e) !! 9  
+              | tMenu e == head (imagens e) !! 10 = head (imagens e) !! 10  
+              | tMenu e == head (imagens e) !! 11 = head (imagens e) !! 11 
+              | tMenu e == head (imagens e) !! 12 = head (imagens e) !! 12
+              | tMenu e == head (imagens e) !! 13 = head (imagens e) !! 13    
+              | tMenu e == head (imagens e) !! 14 = head (imagens e) !! 14    
+
+reageEventoCriaMapa :: Event -> EstadoGloss -> EstadoGloss
+reageEventoCriaMapa (EventKey (SpecialKey KeyRight) Down _ _) e = e{acoesMapa = (acoesMapa e) ++ [Move D],mapa = (constroi ((acoesMapa e) ++ [Move D]))}
+reageEventoCriaMapa (EventKey (SpecialKey KeyLeft) Down _ _) e = e{acoesMapa = (acoesMapa e) ++ [Move E],mapa = (constroi ((acoesMapa e) ++ [Move E]))}
+reageEventoCriaMapa (EventKey (SpecialKey KeyUp) Down _ _) e = e{acoesMapa = (acoesMapa e) ++ [Move C],mapa = (constroi ((acoesMapa e) ++ [Move C]))}
+reageEventoCriaMapa (EventKey (SpecialKey KeyDown) Down _ _) e = e{acoesMapa = (acoesMapa e) ++ [Move B],mapa = (constroi ((acoesMapa e) ++ [Move B]))}
+reageEventoCriaMapa (EventKey (Char 'd') Down _ _) e = e{acoesMapa = (acoesMapa e) ++ [Desenha],mapa = (constroi ((acoesMapa e) ++ [Desenha]))}
+reageEventoCriaMapa (EventKey (Char 'm') Down _ _) e = e{acoesMapa = (acoesMapa e) ++ [MudaTetromino],mapa = (constroi ((acoesMapa e) ++ [MudaTetromino]))}
+reageEventoCriaMapa (EventKey (Char 'p') Down _ _) e = e{acoesMapa = (acoesMapa e) ++ [MudaParede],mapa = (constroi ((acoesMapa e) ++ [MudaParede]))}
+reageEventoCriaMapa (EventKey (Char 'r') Down _ _) e = e{acoesMapa = (acoesMapa e) ++ [Roda],mapa = (constroi ((acoesMapa e) ++ [Roda]))}
+
+reageEventoCriaMapa _ e = e  
+
+mudaMapaEstGloss :: Mapa -> EstadoGloss -> EstadoGloss
+mudaMapaEstGloss m e = e {mapa = m} 
+
+desenhaCriaMapa :: Mapa -> EstadoGloss -> Picture
+desenhaCriaMapa m e = Pictures $ desenhaMapa m (-posX) (-posY) bestSize pixelPecaSize e
+    where (tlinha,tcol) = (length (head m), length m)
+          sizePecaX = 1280 /(fromIntegral (tlinha*100)) 
+          sizePecaY = 720 / (fromIntegral (tcol*100)) 
+          bestSize  = if sizePecaY > sizePecaX then sizePecaX else sizePecaY 
+          pixelPecaSize =  bestSize * 100
+          posX = (pixelPecaSize * (fromIntegral tlinha))/2
+          posY = (pixelPecaSize * (fromIntegral tcol))/2
+
+desenhaMapa :: Mapa -> Float -> Float -> Float -> Float -> EstadoGloss -> [Picture]
+desenhaMapa [] _ _ _ _ _= []
+desenhaMapa (h:t) posx posy bestSizeToScale pixelPecaSize e = (Translate posx posy (Pictures (desenhaLinha e 0 pixelPecaSize bestSizeToScale h))) : (desenhaMapa t posx (posy+pixelPecaSize) bestSizeToScale pixelPecaSize e)
+  
+desenhaLinha :: EstadoGloss -> Float -> Float -> Float -> [Peca] -> [Picture]
+desenhaLinha e _ _ _ [] = []
+desenhaLinha e posI sizePixelPeca sizePecaToScale (h:t) = (Translate posI 0 (Scale sizePecaToScale sizePecaToScale (desenhaPeca e h))) : (desenhaLinha e (posI+sizePixelPeca) sizePixelPeca sizePecaToScale t) 
+
+desenhaPeca :: EstadoGloss -> Peca -> Picture
+desenhaPeca e (Bloco Indestrutivel) = ((imagens e !! 2) !!0)
+desenhaPeca e (Bloco Destrutivel)  = ((imagens e !! 2) !!1)
+desenhaPeca e (Vazia)  = ((imagens e !! 2) !!2)
+
+dm :: Display 
+dm = InWindow "Tanks" (1280,720) (0,0)
+
+fr::Int
+fr = 60
+
+main :: IO ()
+main = do tank1 <- loadBMP "/home/rui/2018li1g027/src/Pictures/Tanks/tank1.bmp"
+          tank2 <- loadBMP "/home/rui/2018li1g027/src/Pictures/Tanks/tank2.bmp"
+          tank3 <- loadBMP "/home/rui/2018li1g027/src/Pictures/Tanks/tank3.bmp"
+          tank4 <- loadBMP "/home/rui/2018li1g027/src/Pictures/Tanks/tank4.bmp"
+          menuStart <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuStart2.bmp"
+          menuCM    <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuCriaMapa.bmp"
+          menuJogar <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuJogar.bmp"
+          menuQJM   <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuQuantJogMeio.bmp"
+          menuQJM2  <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuQuantJogMeio2.bmp"
+          menuQJM3  <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuQuantJogMeio3.bmp"
+          menuQJM4  <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuQuantJogMeio4.bmp"
+          menuQdir1 <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuSetaDir.bmp"
+          menuQdir2 <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuSetaDir2.bmp"
+          menuQdir3 <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuSetaDir3.bmp"
+          menuQdir4 <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuSetaDir4.bmp"
+          menuQesq1 <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuSetaEsq.bmp"
+          menuQesq2 <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuSetaEsq2.bmp"
+          menuQesq3 <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuSetaEsq3.bmp"
+          menuQesq4 <- loadBMP "/home/rui/2018li1g027/src/Pictures/Menus/MenuSetaEsq4.bmp"
+          pecaI <- loadBMP "/home/rui/2018li1g027/src/Pictures/Mapa/PecaI.bmp"
+          pecaD <- loadBMP "/home/rui/2018li1g027/src/Pictures/Mapa/PecaD.bmp"
+          pecaV <- loadBMP "/home/rui/2018li1g027/src/Pictures/Mapa/PecaV.bmp"
+          let imagesMenu = [menuStart, menuCM, menuJogar, menuQJM,menuQJM2,menuQJM3,menuQJM4, menuQdir1, menuQdir2, menuQdir3, menuQdir4, menuQesq1, menuQesq2, menuQesq3, menuQesq4]
+          let imagesTank = [tank1,tank2,tank3,tank4]
+          let imagesMapa = [pecaI,pecaD,pecaV]
+          let allimages  = [imagesMenu] ++ [imagesTank] ++ [imagesMapa] 
+          play dm                
+               (greyN 0.6)                                                   
+               fr                                                          
+               (estadoI allimages)                                                         
+               desenhaEstado                                                 
+               reageEvento                                                   
+               reageTempo 
+
+
+

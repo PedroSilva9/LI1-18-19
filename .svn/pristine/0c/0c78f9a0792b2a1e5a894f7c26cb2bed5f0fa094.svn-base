@@ -1,0 +1,144 @@
+-- | Este módulo define funções comuns da Tarefa 3 do trabalho prático.
+module Tarefa3_2018li1g027 where
+import Data.List
+import Data.Char
+import LI11819
+import Tarefa2_2018li1g027
+import TestesT3
+
+-- * Testes
+
+-- | Testes unitários da Tarefa 3.
+--
+-- Cada teste é um 'Estado'.
+testesT3 :: [Estado]
+testesT3 = test 
+
+toString :: Char -> String
+toString c = [c]
+
+mapaParaString :: Mapa -> String
+mapaParaString m = lin ++ col ++ mapa
+  where
+    col = toString . chr . length . head $ m
+    lin = toString . chr . length $ m
+    mapa = concat $ map linhaMapa m
+
+linhaMapa :: [Peca] -> String
+linhaMapa [] = []
+linhaMapa peca = nTimes ++ linhaMapa resto
+  where
+    tuplo  = span (==head peca) peca
+    nTimes = (toString . chr . length . fst $ tuplo) ++ (identificaPeca . head $ peca)
+    resto  = snd tuplo
+
+identificaPeca :: Peca -> String
+identificaPeca (Bloco Indestrutivel) = "I"
+identificaPeca (Bloco Destrutivel) = "D"
+identificaPeca (Vazia) = "V"
+
+takeUntil :: Int -> Int -> String -> String
+takeUntil _ _ [] = []
+takeUntil len sum (h:x:t) | ord h + sum <= len = h : x : takeUntil len (sum + ord h) t
+                  | otherwise = []
+
+stringParaMapa :: String -> Mapa
+stringParaMapa [] = []
+stringParaMapa str = stringParaMapaAux len strmapa
+  where
+    len = ord . head $ str
+    strmapa = drop 1 str
+
+stringParaMapaAux :: Int -> String -> Mapa
+stringParaMapaAux _ [] = []
+stringParaMapaAux len str = stringLinhaMapa linha : stringParaMapaAux len resto
+  where
+    linha = takeUntil len 0 str
+    resto = drop (length linha) str
+
+stringLinhaMapa :: String -> [Peca]
+stringLinhaMapa [] = []
+stringLinhaMapa (h:x:t) = replicate nTimes peca ++ stringLinhaMapa t
+  where
+    nTimes = ord h
+    peca = fromCharToPeca x
+
+fromCharToPeca :: Char -> Peca
+fromCharToPeca 'I' = Bloco Indestrutivel
+fromCharToPeca 'D' = Bloco Destrutivel
+fromCharToPeca 'V' = Vazia
+
+jogadoresParaString :: [Jogador] -> String
+jogadoresParaString [] = []
+jogadoresParaString l = nPlayers ++ jogadoresAsString  
+  where
+    nPlayers = toString . chr . length $ l
+    jogadoresAsString = concat $ map jogadorParaString l
+
+jogadorParaString :: Jogador -> String
+jogadorParaString (Jogador p d v l c) = x ++ y ++ (show d) ++ vida ++ laser ++ choque
+  where
+    x = toString . chr . fst $ p
+    y = toString . chr . snd $ p
+    (vida,laser,choque) = (toString . chr $ v, toString . chr $ l, toString . chr $ c)
+
+stringParaJogadores :: String -> [Jogador]
+stringParaJogadores [] = []
+stringParaJogadores str = jogador : stringParaJogadores newStr
+  where
+    jogador = stringParaJogador $ take 6 str 
+    newStr = drop 6 str
+
+stringParaJogador :: String -> Jogador
+stringParaJogador str = Jogador pos dir v l c 
+  where
+    pos = (ord $ str !! 0, ord $ str !! 1)
+    dir = read . toString $ str !! 2 :: Direcao
+    (v,l,c) = (ord $ str !! 3, ord $ str !! 4, ord $ str !! 5)
+
+disparosParaString :: [Disparo] -> String
+disparosParaString [] = []
+disparosParaString l = concat $ map disparoParaString l 
+
+disparoParaString :: Disparo -> String
+disparoParaString (DisparoCanhao ind (x,y) dir) = "K" ++ [chr ind] ++ [chr x] ++ [chr y] ++ (show dir)
+disparoParaString (DisparoLaser  ind (x,y) dir) = "L" ++ [chr ind] ++ [chr x] ++ [chr y] ++ (show dir)
+disparoParaString (DisparoChoque ind tic)       = "C" ++ [chr ind] ++ [chr tic]
+
+stringParaDisparos :: String -> [Disparo]
+stringParaDisparos [] = []
+stringParaDisparos l | head l == 'K' = stringParaDisparo 'K' strLK : stringParaDisparos restoLK
+                     | head l == 'L' = stringParaDisparo 'L' strLK : stringParaDisparos restoLK
+                     | head l == 'C' = stringParaDisparo 'C' strC : stringParaDisparos restoC
+  where
+    strLK = take 4 . tail $ l
+    restoLK = drop 5 l
+    strC = take 2 . tail $ l
+    restoC = drop 3 l
+
+stringParaDisparo :: Char -> String -> Disparo
+stringParaDisparo disp str | disp == 'K' = DisparoCanhao ind pos dir
+                           | disp == 'L' = DisparoLaser ind pos dir
+                           | disp == 'C' = DisparoChoque ind tick
+  where
+    ind = ord $ str !! 0
+    pos = (ord $ str !! 1, ord $ str !! 2)
+    dir = read . toString $ str !! 3
+    tick = ord $ str !! 1
+
+descomprime :: String -> Estado
+descomprime str = Estado mapa jogador disparos
+  where
+    (mLin, mCol, mColchr) = (ord $ str !! 0, ord $ str !! 1, str !! 1)
+    mapaStr = takeUntil (mLin*mCol) 0 (drop 2 str)
+    (mapa, resto) = (stringParaMapa $ mColchr : mapaStr, drop (length mapaStr + 2) str)
+    jogadorStr = take ((ord $ resto !! 0)*6) (tail resto)
+    (jogador, disparosStr) = (stringParaJogadores jogadorStr, drop (length jogadorStr +1) resto)
+    disparos = stringParaDisparos disparosStr
+
+comprime :: Estado -> String
+comprime e = mapa ++ jogadores ++ disparos
+  where
+    mapa = mapaParaString . mapaEstado $ e
+    jogadores = jogadoresParaString . jogadoresEstado $ e
+    disparos = disparosParaString . disparosEstado $ e

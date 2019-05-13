@@ -1,0 +1,514 @@
+{-
+-- | Este módulo define funções comuns da Tarefa 3 do trabalho prático.
+module Tarefa3_2018li1g027 where
+import Data.List
+import Data.Char
+import LI11819
+import Tarefa2_2018li1g027
+import TestesT3
+
+-- * Testes
+
+-- | Testes unitários da Tarefa 3.
+--
+-- Cada teste é um 'Estado'.
+testesT3 :: [Estado]
+testesT3 = test 
+
+toString :: Char -> String
+toString c = [c]
+
+mapaParaString :: Mapa -> String
+mapaParaString m = lin ++ col ++ mapa
+  where
+    col = toString . chr . length . head $ m
+    lin = toString . chr . length $ m
+    mapa = concat $ map linhaMapa m
+
+linhaMapa :: [Peca] -> String
+linhaMapa [] = []
+linhaMapa peca = nTimes ++ linhaMapa resto
+  where
+    tuplo  = span (==head peca) peca
+    nTimes = (toString . chr . length . fst $ tuplo) ++ (identificaPeca . head $ peca)
+    resto  = snd tuplo
+
+identificaPeca :: Peca -> String
+identificaPeca (Bloco Indestrutivel) = "I"
+identificaPeca (Bloco Destrutivel) = "D"
+identificaPeca (Vazia) = "V"
+
+takeUntil :: Int -> Int -> String -> String
+takeUntil _ _ [] = []
+takeUntil len sum (h:x:t) | ord h + sum <= len = h : x : takeUntil len (sum + ord h) t
+                  | otherwise = []
+
+stringParaMapa :: String -> Mapa
+stringParaMapa [] = []
+stringParaMapa str = stringParaMapaAux len strmapa
+  where
+    len = ord . head $ str
+    strmapa = drop 1 str
+
+stringParaMapaAux :: Int -> String -> Mapa
+stringParaMapaAux _ [] = []
+stringParaMapaAux len str = stringLinhaMapa linha : stringParaMapaAux len resto
+  where
+    linha = takeUntil len 0 str
+    resto = drop (length linha) str
+
+stringLinhaMapa :: String -> [Peca]
+stringLinhaMapa [] = []
+stringLinhaMapa (h:x:t) = replicate nTimes peca ++ stringLinhaMapa t
+  where
+    nTimes = ord h
+    peca = fromCharToPeca x
+
+fromCharToPeca :: Char -> Peca
+fromCharToPeca 'I' = Bloco Indestrutivel
+fromCharToPeca 'D' = Bloco Destrutivel
+fromCharToPeca 'V' = Vazia
+
+jogadoresParaString :: [Jogador] -> String
+jogadoresParaString [] = []
+jogadoresParaString l = nPlayers ++ jogadoresAsString  
+  where
+    nPlayers = toString . chr . length $ l
+    jogadoresAsString = concat $ map jogadorParaString l
+
+jogadorParaString :: Jogador -> String
+jogadorParaString (Jogador p d v l c) = x ++ y ++ (show d) ++ vida ++ laser ++ choque
+  where
+    x = toString . chr . fst $ p
+    y = toString . chr . snd $ p
+    (vida,laser,choque) = (toString . chr $ v, toString . chr $ l, toString . chr $ c)
+
+stringParaJogadores :: String -> [Jogador]
+stringParaJogadores [] = []
+stringParaJogadores str = jogador : stringParaJogadores newStr
+  where
+    jogador = stringParaJogador $ take 6 str 
+    newStr = drop 6 str
+
+stringParaJogador :: String -> Jogador
+stringParaJogador str = Jogador pos dir v l c 
+  where
+    pos = (ord $ str !! 0, ord $ str !! 1)
+    dir = read . toString $ str !! 2 :: Direcao
+    (v,l,c) = (ord $ str !! 3, ord $ str !! 4, ord $ str !! 5)
+
+disparosParaString :: [Disparo] -> String
+disparosParaString [] = []
+disparosParaString l = concat $ map disparoParaString l 
+
+disparoParaString :: Disparo -> String
+disparoParaString (DisparoCanhao ind (x,y) dir) = "K" ++ [chr ind] ++ [chr x] ++ [chr y] ++ (show dir)
+disparoParaString (DisparoLaser  ind (x,y) dir) = "L" ++ [chr ind] ++ [chr x] ++ [chr y] ++ (show dir)
+disparoParaString (DisparoChoque ind tic)       = "C" ++ [chr ind] ++ [chr tic]
+
+stringParaDisparos :: String -> [Disparo]
+stringParaDisparos [] = []
+stringParaDisparos l | head l == 'K' = stringParaDisparo 'K' strLK : stringParaDisparos restoLK
+                     | head l == 'L' = stringParaDisparo 'L' strLK : stringParaDisparos restoLK
+                     | head l == 'C' = stringParaDisparo 'C' strC : stringParaDisparos restoC
+  where
+    strLK = take 4 . tail $ l
+    restoLK = drop 5 l
+    strC = take 2 . tail $ l
+    restoC = drop 3 l
+
+stringParaDisparo :: Char -> String -> Disparo
+stringParaDisparo disp str | disp == 'K' = DisparoCanhao ind pos dir
+                           | disp == 'L' = DisparoLaser ind pos dir
+                           | disp == 'C' = DisparoChoque ind tick
+  where
+    ind = ord $ str !! 0
+    pos = (ord $ str !! 1, ord $ str !! 2)
+    dir = read . toString $ str !! 3
+    tick = ord $ str !! 1
+
+descomprime :: String -> Estado
+descomprime str = Estado mapa jogador disparos
+  where
+    (mLin, mCol, mColchr) = (ord $ str !! 0, ord $ str !! 1, str !! 1)
+    mapaStr = takeUntil (mLin*mCol) 0 (drop 2 str)
+    (mapa, resto) = (stringParaMapa $ mColchr : mapaStr, drop (length mapaStr + 2) str)
+    jogadorStr = take ((ord $ resto !! 0)*6) (tail resto)
+    (jogador, disparosStr) = (stringParaJogadores jogadorStr, drop (length jogadorStr +1) resto)
+    disparos = stringParaDisparos disparosStr
+
+comprime :: Estado -> String
+comprime e = mapa ++ jogadores ++ disparos
+  where
+    mapa = mapaParaString . mapaEstado $ e
+    jogadores = jogadoresParaString . jogadoresEstado $ e
+    disparos = disparosParaString . disparosEstado $ e
+-}
+{-|
+Module      : Tarefa3_2018li1g027
+Description : Tarefa 3 do projeto a desenvolver no âmbito da disciplina de LI1.
+Copyright   : José Pedro Silva <a84577@uminho.pt>; Rui Carvalho <a89498@uminho.pt>
+Tarefa 3 do projeto a desenvolver no âmbito da unidade curricular LI1.
+O objetivo desta tarefa é comprimir um mapa para uma string e fazer o processo inverso obtendo o estado inicial.
+-}
+
+
+
+-- | Este módulo define funções comuns da Tarefa 3 do trabalho prático.
+module Tarefa3_2018li1g027 where
+import Data.List
+import Data.Char
+import LI11819
+import Tarefa2_2018li1g027
+import TestesT3
+
+-- * Conjunto de testes
+-- | Testes da tarefa 1. /Para ver exemplos de testes aceder ao ficheiro 'TestesT1'. /
+testesT3 :: [Estado]
+testesT3 = test 
+
+{- | Função que transforma um caracter numa string.
+
+
+== Exemplo de utilização:
+>>> toString 'c'
+    "c" 
+-}
+toString :: Char -> String
+toString c = [c]
+
+-- * Compressão de um mapa para uma String.
+{- | Função que comprime um mapa para uma String.
+
+== Exemplo de utilização:
+>>> transformaMapa . mapaEstado .head $ testesT3
+    "\n\n,\a?\bV,"
+-}
+transformaMapa :: Mapa -> String -- Funcao Principal da compressao do mapa 
+transformaMapa [] = []
+transformaMapa l = chr mlinhas : chr mColunas : strMapaInterior
+    where mColunas = length $ head l -- Tamanho de uma linha
+          mlinhas = length l
+          strTotal = agrupaPI $ agrupaPecasVaziasPE (length(head l) -2) (vchaveta2substitute . identicaPecasUnitariasJuntas . mapaParaIdent $ l) -- Codificaçao da string
+          lenmColunas = length (show mColunas) -- length da string do tamanho de uma linha do mapa
+          lenStrtotal = length strTotal -- Length da linha total já codificada
+          strSemPrimeiraLinha = drop 2 strTotal -- Take e drop para ficar apenas com o mapa com as linhas interiores (Sem primeira nem última linha)  
+          strMapaInterior = take ((length strSemPrimeiraLinha)-2) strSemPrimeiraLinha 
+
+{- |Função que transforma um mapa numa String, sendo que, cada peça é subsituida pelo seu identificador.
+
+== Exemplo de utilização:
+>>>  mapaParaIdent . mapaEstado . head $ testesT3
+  "\nI,\bV,,\bV,,\bV,,\bV,,\bV,,\bV,,\bV,,\bV,\nI"
+-}
+
+mapaParaIdent :: Mapa -> String--Passar cada peça para identificador de pecas
+mapaParaIdent [] = ""
+mapaParaIdent l = (substituiPecaUnitaria . linhaMapa $ head l) ++ mapaParaIdent (tail l)
+
+{- |Função que transforma uma linha do mapa numa String,sendo que, cada peça é passa a ser representada pelo seu identificador.
+
+== Exemplo de utilização:
+>>>  linhaMapa [Bloco Indestrutivel, Vazia, Vazia, Bloco Indestrutivel]
+    "\SOHI\STXV\SOHI"
+-}
+
+linhaMapa :: [Peca] -> String
+linhaMapa [] = []
+linhaMapa peca = nTimes ++ linhaMapa resto
+  where
+    tuplo  = span (==head peca) peca
+    nTimes = (toString . chr . length . fst $ tuplo) ++ (identificadorDePeca . head $ peca)
+    resto  = snd tuplo
+
+
+{- |Função que transforma um caracter por outro identificador no caso de essa peça ser no mapa uma peça unitária, ou seja, se for 1V, 1D ou 1I.
+== Exemplo de utilização:
+>>> identificadorUnitario 'I'
+  ','      
+-}
+
+
+identificadorUnitario :: Char -> Char
+identificadorUnitario c = if c == 'V' then '-' else if c == 'D' then '.' else ','
+
+
+{- |Função que converte todas as peças unitárias de uma string por outro identificador.
+== Exemplo de utilização:
+>>> substituiPecaUnitaria "\SOHI\STXV\SOHI"
+    ",\STXV,"    
+-}
+
+substituiPecaUnitaria :: String -> String --Substitui todas as peças unitárias ou seja 1V ou 1D ou 1I passa para o respetivo identifador unitário
+substituiPecaUnitaria [] = []
+substituiPecaUnitaria l = let (t,h) = (take 1 l, drop 1 l)
+                          in if (ord . head $ t) == 1 then [identificadorUnitario (head h)] ++ substituiPecaUnitaria (tail h) else t ++ [(head h)] ++ (substituiPecaUnitaria (tail h))  
+
+
+{- |Função que converte todas as peças unitárias que estejam seguidas uma da outra na string pelo caracter '}'.
+== Exemplo de utilização:
+>>> identicaPecasUnitariasJuntas  "\STXV,,\SOHV"
+    "\STXV}\SOHV"        
+-}
+
+identicaPecasUnitariasJuntas :: String -> String -- Identifica peças I unitarias juntas, ou seja sempre que encontra ",," passa para "}"
+identicaPecasUnitariasJuntas [] = []
+identicaPecasUnitariasJuntas l = let (l1,l2) = span (/=',') l
+                                     resto = l2
+                                 in if l2 == [] then l1 ++ (identicaPecasUnitariasJuntas l2) else if head l2 == head (tail resto) then l1 ++ "}" ++ (identicaPecasUnitariasJuntas (tail (tail resto))) else l1++ "," ++ identicaPecasUnitariasJuntas (tail resto)
+
+
+{- |Função que converte identificadores de blocos vazios seguidos de identificadores de peças unitárias que estavam juntas.
+== Exemplo de utilização:
+>>> vchaveta2substitute "\STXV}\SOHV}"
+    "\STX!\SOH!"      
+-}
+
+vchaveta2substitute :: String -> String -- Subsititui todos os "V}" por um "!"
+vchaveta2substitute [] = []
+vchaveta2substitute l = let (l1,l2) = span (/= 'V') l
+                        in if l2 == [] then l1 else if (take 2 l2) == "V}" then l1 ++"!" ++ (vchaveta2substitute $ drop 2 l2) else l1 ++ "V" ++ (vchaveta2substitute . tail $ l2)
+
+{- |Função que recebe o tamanho de uma linha da string e substitui na string sempre que aparece o tamanho da linha - 2 seguido de um '!' por um '?'.
+
+== Exemplo de utilização:
+>>> agrupaPecasVaziasPE 1 "\STX!\SOH!\SOH!"
+    "\STX!??"      
+-}
+
+agrupaPecasVaziasPE :: Int -> String -> String -- Junta todos os '!' em '?'
+agrupaPecasVaziasPE _ [] = []
+agrupaPecasVaziasPE (mCol) l = if l2 == [] then l1 else if a1 == mCol then  a2 ++ "?" ++ agrupaPecasVaziasPE mCol (tail l2) else l1 ++ "!" ++ agrupaPecasVaziasPE mCol (tail l2)       
+    where stringmCol = show mCol 
+          (l1,l2) = span (/= '!') l
+          resto = l2
+          a1 = (ord . head $ reverse l1)
+          a2 = reverse . tail . reverse $ l1
+
+
+{- |Função agrupa todos os '?' de uma string.
+
+== Exemplo de utilização:
+>>> agrupaPI "\STX!???\STX!"
+    "\STX!\ETX?\STX!"   
+-}
+
+agrupaPI :: String -> String  -- Junta todos os '?' que estejam seguidos
+agrupaPI [] = []
+agrupaPI l = let (l1,l2) = span (/= '?') l
+             in if l2 == [] then l1 else l1 ++ (repetePecas $ takeWhile (== '?') l2) ++ (agrupaPI $ dropWhile (=='?') l2)
+
+
+{- |Função usada para agrupar caracteres.
+
+== Exemplo de utilização:
+>>> repetePecas "VVV"
+    "\ETXV"   
+-}
+
+repetePecas :: String -> String -- Esta funcao é usada para juntar varios caracteres 
+repetePecas [] = ""
+repetePecas l = aux x ++ repetePecas y 
+   where (x,y) = span (== head l) l
+         aux :: String -> String
+         aux [] = ""
+         aux x = let (l1,l2) = span (== head x) x
+                 in (chr .length $ l1) : [head x] ++ l2               
+
+
+{- |Função que transforma uma peça num identificador.
+
+== Exemplo de utilização:
+>>>  identificadorDePeca (Bloco Indestrutivel)
+    'I'  
+-}
+
+identificadorDePeca :: Peca -> String
+identificadorDePeca (Bloco Indestrutivel) = "I" 
+identificadorDePeca (Bloco Destrutivel) = "D"
+identificadorDePeca (Vazia) = "V"
+
+--* Descompressão de uma String para uma mapa.
+
+{- |Função principal da descompressão do mapa, que converte uma string para um mapa.
+
+== Exemplo de utilização:
+>>>  str2mp "\n\n,\a?\bV,"
+    [[Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Vazia,Bloco Indestrutivel],[Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel,Bloco Indestrutivel]]
+-}
+
+str2mp :: String -> Mapa -- Funcao principal do descompressao do mapa
+str2mp [] = []
+str2mp l = (stringParaMapa.tail .pecasUni2Normal .pecasUniJuntas2PecasUni .pi2Vchaveta $ transformaPIemPE (linhaLength - 2) (reversePIrepetition str))
+    where linhaLength = ord $ (!!) l 1 -- Vai buscar o tamanho de uma linha
+          lista = drop 2 l -- Fica com a string sem as coordenadas do mapa
+          coordenadas = take 2 l --Fica com as coordenadas
+          str = coordenadas ++ [(chr linhaLength)] ++"I"++ lista ++ [(chr linhaLength)] ++ "I" -- Coloca a string direita com os elementos que faltavam, ou seja, a primeira e ultima linha e acrescenta as coordenadas no
+{- |Função que replica uma certa quantida de '?'.
+
+== Exemplo de utilização:
+>>>  reversePIrepetition "\STXV\EOT?\STXV"
+"\STXV????\STXV"    
+-}
+
+
+reversePIrepetition :: String -> String -- Esta funcao reverte a funcao que está acima, ou seja, faz o inverso de agrupar os '?'
+reversePIrepetition [] = []
+reversePIrepetition l = if l2 == [] then l1 else getstrAntesnTimesPI ++ (replicate nTimesPI '?') ++ reversePIrepetition (tail l2)
+    where (l1,l2) = span (/= '?') l -- Obter as strings de maneira em que o head de l2 seja o '?'
+          nTimesPI = ord . head $ take 1 (reverse l1) -- Maneira de obter o valor de quantos '?' é necessário dar replicate 
+          lenStrAntesNTimes = length $ drop 1 (reverse l1) -- Obtem quantos caracteres é que são precisos ficar na string tirando o caracter referente à quantidade de '?'
+          getstrAntesnTimesPI = take lenStrAntesNTimes l -- Obtem tudo aquilo da string que está antes da quantidade de '?' 
+
+transformaPIemPE :: Int -> String -> String -- Funcao que transforma os '?' em '!'
+transformaPIemPE _ [] = []
+transformaPIemPE a l = if head l == '?' then (chr a) : "!" ++ transformaPIemPE a (tail l) else [head l] ++ transformaPIemPE a (tail l)  -- Procura um '?' e substitui pelo tamanho de uma linha (número de colunas) - 2 mais um '!'  
+
+pi2Vchaveta :: String -> String -- Transforma '!' em "V}"
+pi2Vchaveta [] = []
+pi2Vchaveta l = if head l == '!' then "V}" ++ (pi2Vchaveta (tail l)) else [head l] ++ pi2Vchaveta (tail l) -- Se econtrar '!' entao substitui por 'V}' senao continua para a tail e deixa estar o head como estava
+
+pecasUniJuntas2PecasUni :: String -> String -- Transforma 'V}' em "V,," em que ',' representa '1I'
+pecasUniJuntas2PecasUni [] = []
+pecasUniJuntas2PecasUni l = let (l1,l2) = span (/='}') l -- Procura até encontrar uma '}'
+                            in if l2 == [] then l1 else l1 ++ ",," ++ pecasUniJuntas2PecasUni (tail l2)  
+
+pecasUni2Normal :: String -> String --Todas as peças unitarias passam a ser representadas por '\SOH' mais o seu identificador normal
+pecasUni2Normal [] = []
+pecasUni2Normal l = let (l1,l2) = span (\c -> verificaIndicePU c) l -- Separa a lista quando encontra uma dos identificadores de pecas unitarias
+                    in if l2 == [] then l1 else l1 ++ "\SOH" ++ subsPU2Peca (head l2) ++ pecasUni2Normal (tail l2)    
+
+subsPU2Peca :: Char -> String -- Transforma o identificador das pecas unitarias em identificador de pecas normais
+subsPU2Peca '.' = "D"
+subsPU2Peca ',' = "I"
+subsPU2Peca '-' = "V"
+
+verificaIndicePU :: Char -> Bool -- Verifica se num determinado indice tem algum destes caracteres
+verificaIndicePU x = x /= '.' && x /= ',' && x /= '-'
+
+takeUntil :: Int -> Int -> String -> String
+takeUntil _ _ [] = []
+takeUntil len sum (h:x:t) | ord h + sum <= len = h : x : takeUntil len (sum + ord h) t
+                  | otherwise = []
+
+stringParaMapa :: String -> Mapa
+stringParaMapa [] = []
+stringParaMapa str = stringParaMapaAux len strmapa
+  where
+    len = ord . head $ str
+    strmapa = drop 1 str
+
+stringParaMapaAux :: Int -> String -> Mapa
+stringParaMapaAux _ [] = []
+stringParaMapaAux len str = stringLinhaMapa linha : stringParaMapaAux len resto
+  where
+    linha = takeUntil len 0 str
+    resto = drop (length linha) str
+
+stringLinhaMapa :: String -> [Peca]
+stringLinhaMapa [] = []
+stringLinhaMapa (h:x:t) = replicate nTimes peca ++ stringLinhaMapa t
+  where
+    nTimes = ord h
+    peca = fromCharToPeca x
+
+fromCharToPeca :: Char -> Peca 
+fromCharToPeca 'I' = Bloco Indestrutivel
+fromCharToPeca 'D' = Bloco Destrutivel
+fromCharToPeca 'V' = Vazia
+-- FIM
+
+jogadoresParaString :: [Jogador] -> String
+jogadoresParaString [] = []
+jogadoresParaString l = jogadoresAsString  
+  where
+    --nPlayers = toString . chr . length $ l
+    -- Na funcao falta o nPlayer +....
+    jogadoresAsString = concat $ map jogadorParaString l
+
+jogadorParaString :: Jogador -> String
+jogadorParaString (Jogador p d v l c) = x ++ y ++ (show d) ++ vida ++ laser ++ choque
+  where
+    x = toString . chr . fst $ p
+    y = toString . chr . snd $ p
+    (vida,laser,choque) = (toString . chr $ v, toString . chr $ l, toString . chr $ c)
+
+stringParaJogadores :: String -> [Jogador]
+stringParaJogadores [] = []
+stringParaJogadores str = jogador : stringParaJogadores newStr
+  where
+    jogador = stringParaJogador $ take 6 str 
+    newStr = drop 6 str
+
+stringParaJogador :: String -> Jogador
+stringParaJogador str = Jogador pos dir v l c 
+  where
+    pos = (ord $ str !! 0, ord $ str !! 1)
+    dir = read . toString $ str !! 2 :: Direcao
+    (v,l,c) = (ord $ str !! 3, ord $ str !! 4, ord $ str !! 5)
+
+disparosParaString :: [Disparo] -> String
+disparosParaString [] = []
+disparosParaString l = concat $ map disparoParaString l 
+
+disparoParaString :: Disparo -> String
+disparoParaString (DisparoCanhao ind (x,y) dir) = "K" ++ [chr ind] ++ [chr x] ++ [chr y] ++ (show dir)
+disparoParaString (DisparoLaser  ind (x,y) dir) = "L" ++ [chr ind] ++ [chr x] ++ [chr y] ++ (show dir)
+disparoParaString (DisparoChoque ind tic)       = "C" ++ [chr ind] ++ [chr tic]
+
+stringParaDisparos :: String -> [Disparo]
+stringParaDisparos [] = []
+stringParaDisparos l | head l == 'K' = stringParaDisparo 'K' strLK : stringParaDisparos restoLK
+                     | head l == 'L' = stringParaDisparo 'L' strLK : stringParaDisparos restoLK
+                     | head l == 'C' = stringParaDisparo 'C' strC : stringParaDisparos restoC
+  where
+    strLK = take 4 . tail $ l
+    restoLK = drop 5 l
+    strC = take 2 . tail $ l
+    restoC = drop 3 l
+
+stringParaDisparo :: Char -> String -> Disparo
+stringParaDisparo disp str | disp == 'K' = DisparoCanhao ind pos dir
+                           | disp == 'L' = DisparoLaser ind pos dir
+                           | disp == 'C' = DisparoChoque ind tick
+  where
+    ind = ord $ str !! 0
+    pos = (ord $ str !! 1, ord $ str !! 2)
+    dir = read . toString $ str !! 3
+    tick = ord $ str !! 1
+
+descomprime :: String -> Estado
+descomprime str = Estado mapa jogador disparos
+  where
+    (mLin, mCol, mColchr) = (ord $ str !! 0, ord $ str !! 1, str !! 1)
+    (mapaStr,restante) = span (/= '|') str
+    (mapa, resto) = (str2mp mapaStr, tail restante)
+    (jogstr,dispComSeparador) = span (/= '|') resto
+    (jogador, disparosStr) = (stringParaJogadores jogstr, dispComSeparador)
+    disparos = if dispComSeparador == "|" then stringParaDisparos [] else stringParaDisparos (tail dispComSeparador)
+
+
+{-
+descomprime :: String -> Estado
+descomprime str = Estado mapa jogador disparos
+  where
+    (mLin, mCol, mColchr) = (ord $ str !! 0, ord $ str !! 1, str !! 1)
+    mapaStr = takeUntil (mLin*mCol) 0 (drop 2 str)
+    (mapa, resto) = (str2mp $ mColchr : mapaStr, drop (length mapaStr + 2) str)
+    jogadorStr = take ((ord $ resto !! 0)*6) (tail resto)
+    (jogador, disparosStr) = (stringParaJogadores jogadorStr, drop (length jogadorStr +1) resto)
+    disparos = stringParaDisparos disparosStr
+-}
+comprime :: Estado -> String
+comprime e = mapa ++ "|" ++ jogadores ++ "|" ++ disparos
+  where
+    mapa = transformaMapa . mapaEstado $ e
+    jogadores = jogadoresParaString . jogadoresEstado $ e
+    disparos = disparosParaString . disparosEstado $ e
+
+{-
+Existiu alguns erros que me fizeram mudar a forma como a string estava dividida, a única forma que eu econtrei de nao dar erro foi dividir as strings do mapa jogadores e disparos com uma barra
+muda como quiseres.
+Falta a documentacao da T2 eu posso fazer isso enquanto tu das um jeito a este código. Também pus mais alguns testes na T2. Depois acrescento mais. Conseguimos 96.97% de compressão.
+
+-}

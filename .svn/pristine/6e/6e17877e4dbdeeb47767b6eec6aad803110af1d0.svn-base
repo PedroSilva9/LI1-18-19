@@ -1,0 +1,237 @@
+-- | Este módulo define funções comuns da Tarefa 6 do trabalho prático.
+module Tarefa6_2018li1g027 where
+
+import LI11819
+import Tarefa2_2018li1g027
+import Tarefa4_2018li1g027
+import Tarefa1_2018li1g027
+import Control.Monad
+import Data.Maybe
+import Data.List
+-- PRIORIDADES
+-- 1 - Verificar se esta numa zona de perigo, ie, se pode ser afetado por um  laser ou por um canhao, caso possa, mover numa direcao que permita ao jogador estar em segurança
+-- 2 - Verificar se algum jogador está num raio de 3 quadrados, caso se verifique usar choque e consequentemente na próxima jogada disparar laser/canhao (se estiver alinhado com o jogador, caso não esteja mudar a direção)
+-- 3 - Verificar se algum jogador esta na mesma "linha" que o jogador, e se sim, disparar um laser
+-- 4 - Calcular quantos blocos destrutiveis existem na direção do jogador, caso sejam bastantes disparar laser
+-- 5 - Caso não reuna nenhuma das condições anteriores mover numa direção de modo a aproximar-se de um jogador
+
+(<.) :: Maybe a -> Maybe a -> Maybe a
+(<.) Nothing Nothing = Nothing
+(<.) Nothing (Just x) = Just x
+(<.) (Just x) _ = Just x
+
+deleteN :: Int -> [a] -> [a]
+deleteN _ []     = []
+deleteN i (a:as) | i == 0    = as   
+                 | otherwise = a : deleteN (i-1) as
+
+-- * Funções principais da Tarefa 6.
+
+dangerZoneLaser :: (Estado,Int) -> Maybe Jogada
+dangerZoneLaser b@(e,ind) = if null semInversos || null semBot
+                               then Nothing
+                               else Just $ Movimenta betterMove
+  where
+    (allPlayers, bot) = (jogadoresEstado e, allPlayers !! ind)
+    botPos            = asSqr . posicaoJogador $ bot
+    (pathNC,path)     = (pathCalculator b, pathNC >>= id)
+    semBot            = deleteN ind allPlayers
+    lDir              = (mapMaybe (flip runAwayLaser botPos) $ zip pathNC semBot) >>= id
+    semInversos       = (nub lDir) \\ ([C,B,D,E] \\ checkPossibleMove e (posicaoJogador bot) )
+    betterMove        = if (direcaoJogador bot) `elem` semInversos then direcaoJogador bot else head semInversos
+    
+runAwayLaser :: ([Posicao], Jogador) -> [Posicao] -> Maybe [Direcao]
+runAwayLaser (p,j) jPos = if any (flip elem p) jPos
+                               then Just $ [direcaoJogador j, direcaoInversa . direcaoJogador $ j]
+                               else Nothing
+
+checkPossibleMove :: Estado -> Posicao -> [Direcao]
+checkPossibleMove e botPos = availableDirs
+    where
+        availableDirs = aux [B,C,D,E] botPos mapa
+        mapa          = mapaEstado e 
+        aux :: [Direcao] -> Posicao -> Mapa -> [Direcao]
+        aux [] _ _ = []
+        aux (h:t) pos m = if checkV (somaVetores (direcaoParaVetor h) pos) m then h : aux t pos m else aux t pos m
+
+checkV :: Posicao -> Mapa -> Bool
+checkV p m = aux (asSqr p) m
+    where
+        aux :: [Posicao] -> Mapa -> Bool
+        aux [] m = True
+        aux ((l,c):t) m = m !! l !! c /= (Bloco Indestrutivel) && aux t m  
+
+direcaoInversa :: Direcao -> Direcao
+direcaoInversa = toEnum . (flip mod 4) . (+2) . fromEnum
+
+pathCalculator :: (Estado,Int) -> [[Posicao]]
+pathCalculator (e,ind) = path
+  where
+    allPos            = [(l,c) | l <- [0 .. pred . length . mapaEstado $ e], c <- [0 .. pred . length . head . mapaEstado $ e]]
+    allPosGroup       = groupN allPos $ length . head . mapaEstado $ e
+    allI              = posIndestrutivel (mapaEstado e) allPosGroup
+    alivePlayers      = filter (\x -> vidasJogador x /= 0) $ jogadoresEstado e
+    tuplo             = deleteN ind alivePlayers >>= return . posDir
+    path              = map (flip allPosPath allI) $ map (uncurry shotAsTwoBlocks) tuplo 
+
+posDir :: Jogador -> (PosicaoGrelha,Direcao)
+posDir (Jogador p d _ _ _) = (p,d)
+
+dangerZoneCanhoes :: (Estado, Int) -> Maybe Jogada
+dangerZoneCanhoes (e,ind) | qtsdispOnPath == 0 = Nothing
+                          | qtsdispOnPath > 1 = if isNothing bestMove 
+                                                   then Just $ Dispara Canhao
+                                                   else Just $ Movimenta $ fromJust bestMove
+                          | otherwise = howToMove onlyDispDir botDir                    
+  where
+    allCanhoes                       = filter (\d -> case d of {DisparoCanhao{} -> True; _ -> False}) $ disparosEstado e
+    (allPlayers, bot)                = (jogadoresEstado e, allPlayers !! ind)
+    inDanger                         = radiusBlock (posicaoJogador bot) (mapaEstado e)
+    (allDispPos,allDispDir)          = (map posicaoDisparo allCanhoes, map direcaoDisparo allCanhoes)
+    dangerDispCanhao                 = map (flip elem inDanger) allDispPos
+    (dispOnPathIndex, qtsdispOnPath) = quantosDispCanhaoPath dangerDispCanhao
+    (onlyDispDir,dirInversaBot)      = (allDispDir !! (head dispOnPathIndex), direcaoInversa . direcaoJogador $ bot)
+    bestMove                         = bestplay dispOnPathIndex allDispDir dirInversaBot
+    botDir                           = direcaoJogador bot
+
+bestplay :: [Int] -> [Direcao]-> Direcao -> Maybe Direcao
+bestplay l dispDir dirInversaBot = if (null availableDir) then Nothing else Just $ head availableDir
+    where
+        allDispDirOnPath = nub $ [dirInversaBot] ++ aux l dispDir
+        availableDir     = [C,D,B,E] \\ allDispDirOnPath
+        aux :: [Int] -> [Direcao] -> [Direcao]
+        aux t l = foldr (\h -> (:) (l !! h)) l t
+
+howToMove :: Direcao -> Direcao -> Maybe Jogada
+howToMove cdir botdir = if cdir == (direcaoInversa botdir)
+                           then Just $ Dispara Canhao
+                           else Just $ Movimenta $ direcaoInversa cdir
+    
+quantosDispCanhaoPath :: [Bool] -> ([Int],Int)
+quantosDispCanhaoPath l  = (aux 0 l, length $ filter (==True) l)
+  where
+    aux :: Int -> [Bool] -> [Int]
+    aux _ [] = []
+    aux a (h:t) = if h then a : aux (a+1) t else aux (a+1) t
+
+radiusBlock :: PosicaoGrelha -> Mapa -> [PosicaoGrelha]
+radiusBlock (li,co) mapa = [(l,c) | l <- [linhaI..linhaF], c <- [colunaI..colunaF]]
+  where
+    linhaI  = if (li - 2) < 0 then 0 else li -2
+    linhaF  = if (li + 2) < (pred . length $ mapa) then li +2 else pred . length $ mapa
+    colunaI = if (co - 2) < 0 then 0 else co -2
+    colunaF = if (co + 2) < (pred .length . head $ mapa) then co +2 else pred . length . head $ mapa
+
+inChoque :: (Estado, Int) -> Maybe Jogada
+inChoque (e,ind) = if any (flip elem pos) allpPos && null choqueBot && choqueAmmo > 0
+                      then Just $ Dispara Choque
+                      else Nothing
+  where
+    (allPlayers, bot) = (jogadoresEstado e, allPlayers !! ind)
+    choqueAmmo        = choquesJogador bot
+    semBot            = deleteN ind allPlayers
+    pos               = posAfetadasPorChoques (posicaoJogador bot) (mapaEstado e)
+    aliveP            = filter (\c -> vidasJogador c > 0) semBot
+    allpPos           = map posicaoJogador semBot
+    choqueBot         = filter (\d -> case d of {DisparoChoque{jogadorDisparo = ind} -> True; _ -> False}) $ disparosEstado e
+
+shootToKill :: (Estado,Int) -> Maybe Jogada
+shootToKill (e,ind) = if any (flip elem allPlayersPos) path 
+                         then if laserAmmo > 0 then Just $ Dispara Laser else Just $ Dispara Canhao
+                         else Nothing
+  where
+    (allPlayers, bot) = (jogadoresEstado e, allPlayers !! ind)
+    allPos            = [(l,c) | l <- [0 .. pred . length . mapaEstado $ e], c <- [0 .. pred . length . head . mapaEstado $ e]]
+    allPosGroup       = groupN allPos $ length . head . mapaEstado $ e
+    allI              = posIndestrutivel (mapaEstado e) allPosGroup
+    path              = flip allPosPath allI $ (uncurry shotAsTwoBlocks) . posDir $ bot
+    semBot            = deleteN ind allPlayers
+    alivePlayers      = filter (\x -> vidasJogador x /= 0) $ semBot
+    allPlayersPos     = concatMap (asSqr . posicaoJogador) alivePlayers
+    laserAmmo         = lasersJogador bot 
+
+shootDestructable :: (Estado,Int) -> Maybe Jogada
+shootDestructable (e,ind) | howManyOnPath >= 4 && laserAmmo > 0 = Just $ Dispara Laser
+                          | howManyOnPath > 0 = Just $ Dispara Canhao
+                          | otherwise = Nothing
+  where 
+    bot                = jogadoresEstado e !! ind
+    laserAmmo          = lasersJogador bot
+    (allPiecesD, path) = howManyDestructable (e, ind)
+    howManyOnPath      = length allPiecesD
+
+howManyDestructable :: (Estado,Int) -> ([Posicao],[Posicao])
+howManyDestructable (e,ind) = (allPiecesD, path)
+  where
+    (allPlayers, bot) = (jogadoresEstado e, allPlayers !! ind)
+    allPos            = [(l,c) | l <- [0 .. pred . length . mapaEstado $ e], c <- [0 .. pred . length . head . mapaEstado $ e]]
+    allPosGroup       = groupN allPos $ length . head . mapaEstado $ e
+    allI              = posIndestrutivel (mapaEstado e) allPosGroup
+    path              = flip allPosPath allI $ (uncurry shotAsTwoBlocks) . posDir $ bot 
+    allPiecesD        = mapMaybe (findPieceDest (mapaEstado e)) path
+
+findPieceDest :: Mapa -> Posicao -> Maybe Posicao
+findPieceDest m p@(l,c) = if (m !! l !! c) == (Bloco Destrutivel)
+                             then Just p
+                             else Nothing
+
+aproxPlayer :: (Estado,Int) -> Maybe Jogada
+aproxPlayer (e,ind) = if null bestDirToMove then Nothing else Just . Movimenta $ head bestDirToMove
+  where
+    (allPlayers, bot) = (jogadoresEstado e, allPlayers !! ind)
+    semBot            = deleteN ind allPlayers
+    alivePlayers      = filter (\x -> vidasJogador x /= 0) $ semBot
+    -- allplayerPos      = map posicaoJogador alivePlayers
+    semBotPos         = map posicaoJogador alivePlayers -- $ deleteN ind 
+    botPos            = posicaoJogador bot
+    availableDirs     = checkPossibleMove e botPos
+    bestDirToMove     = bestDir botPos semBotPos (availableDirs \\ [direcaoInversa $ direcaoJogador bot]) e 
+    
+
+bestDir :: Posicao -> [Posicao] -> [Direcao] -> Estado -> [Direcao]
+bestDir p@(l,c) jogPosList dirList e = if isNothing (elemIndex nextPos possibleBotPos) then [] else [dirList !! (fromJust $ elemIndex nextPos possibleBotPos)]
+  where
+    l                = map direcaoParaVetor dirList
+    possibleBotPos   = map (somaVetores p ) l
+    asSqrList        = concatMap (asSqr) possibleBotPos
+    jogadorMaisProx  = calculaPosMaisProx p jogPosList 
+    nextPos          = calculaPosMaisProx jogadorMaisProx possibleBotPos 
+    
+        
+calculaPosMaisProx :: Posicao -> [Posicao] -> Posicao
+calculaPosMaisProx pos listPos = listPos !! (distMenor $ map (aux pos) listPos)
+  where
+    aux :: Posicao -> Posicao -> Float
+    aux (x,y) h = dist (x,y) h
+
+distMenor :: [Float] -> Int
+distMenor [] = -1
+distMenor (h:t) = aux h 0 1 t
+  where
+    aux vm indmin indreal [] = indmin
+    aux vm indmin indreal (x:xs) | x < vm    = aux x indreal (succ indreal) xs
+                                 | otherwise = aux vm indmin (succ indreal) xs
+
+dist :: Posicao -> Posicao -> Float
+dist (a,b) (x,y) = sqrt $ (fromIntegral $ y-b)^2 + (fromIntegral $ x-a)^2        
+
+-- | Define um ro'bot' capaz de jogar autonomamente o jogo.
+bot :: Int          -- ^ O identificador do 'Jogador' associado ao ro'bot'.
+    -> Estado       -- ^ O 'Estado' para o qual o ro'bot' deve tomar uma decisão.
+    -> Maybe Jogada -- ^ Uma possível 'Jogada' a efetuar pelo ro'bot'.
+bot ind e = dangerCanhoes <. choqueEnemies <. toKill <. destructable <. getCloser 
+  where
+    b             = (e,ind)
+    dangerLaser   = dangerZoneLaser b
+    dangerCanhoes = dangerZoneCanhoes b
+    choqueEnemies = inChoque b
+    toKill        = shootToKill b
+    destructable  = shootDestructable b
+    getCloser     = aproxPlayer b
+  
+-- PRIORIDADES
+-- 1 - Verificar se esta numa zona de perigo, ie, se pode ser afetado por um  laser ou por um canhao, caso possa, mover numa direcao que permita ao jogador estar em segurança
+-- 2 - Verificar se algum jogador está num raio de 3 quadrados, caso se verifique usar choque e consequentemente na próxima jogada disparar laser/canhao (se estiver alinhado com o jogador, caso não esteja mudar a direção)
+-- 3 - Verificar se algum jogador esta na mesma "linha" que o jogador, e se sim, disparar um laser
+-- 4 - Calcular quantos blocos destrutiveis existem na direção do jogador, caso sejam bastantes disparar laser
+-- 5 - Caso não reuna nenhuma das condições anteriores mover numa direção de modo a aproximar-se de um jogador

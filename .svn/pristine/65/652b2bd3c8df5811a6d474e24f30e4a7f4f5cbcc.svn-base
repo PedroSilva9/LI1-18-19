@@ -1,0 +1,182 @@
+-- | Este módulo define funções comuns da Tarefa 3 do trabalho prático.
+module Tarefa3_2018li1g027 where
+import Data.List
+import Data.Char
+import LI11819
+import Tarefa2_2018li1g027
+import TestesT3
+
+-- * Testes
+
+-- | Testes unitários da Tarefa 3.
+--
+-- Cada teste é um 'Estado'.
+testesT3 :: [Estado]
+testesT3 = test 
+
+takeWhileInclusive :: (a -> Bool) -> [a] -> [a]
+takeWhileInclusive _ [] = []
+takeWhileInclusive p (x:xs) = x : if p x then takeWhileInclusive p xs
+                                         else []
+
+-- MAPA PARA STRING
+identificaPeca :: Peca -> String
+identificaPeca (Bloco Indestrutivel) = "I"
+identificaPeca (Bloco Destrutivel) = "D"
+identificaPeca (Vazia) = "V"
+
+mpToStr :: Mapa -> String
+mpToStr [] = []
+mpToStr [x] = linhaMapa x
+mpToStr (h:t) = linhaMapa h ++ "\n" ++ mpToStr t
+
+linhaMapa :: [Peca] -> String
+linhaMapa [] = []
+linhaMapa peca = nTimes ++ linhaMapa resto
+  where
+    tuplo  = span (==head peca) peca
+    nTimes = show (length . fst $ tuplo) ++ (identificaPeca . head $ peca)
+    resto  = snd tuplo
+
+toMapa :: String -> Mapa
+toMapa [] = []
+toMapa str = let newStr = str ++ "\n"
+             in toMapaAux newStr
+
+toMapaAux :: String -> Mapa
+toMapaAux [] = []
+toMapaAux str = let tuplo = span (/='\n') str
+                in  aux (fst tuplo) : toMapaAux (tail . snd $ tuplo)
+
+aux :: String -> [Peca]
+aux [] = []
+aux str = replicate xTimes peca ++ aux (tail resto)
+  where
+    tuplo  = span (not . isLetter) str
+    xTimes = read . fst $ tuplo :: Int
+    resto  = snd tuplo
+    peca   = fromCharToPeca . head $ resto
+
+fromCharToPeca :: Char -> Peca
+fromCharToPeca 'I' = Bloco Indestrutivel
+fromCharToPeca 'D' = Bloco Destrutivel
+fromCharToPeca 'V' = Vazia
+
+---------------------------------------------------------------------------------------------------------
+
+--JOGADOR PARA STRING
+jogadorParaStr :: [Jogador] -> String
+jogadorParaStr [] = []
+jogadorParaStr [x] = jparaString x
+jogadorParaStr (h:t) = jparaString h ++ "\n" ++ jogadorParaStr t
+
+jparaString :: Jogador -> String
+jparaString (Jogador p d v l c) = (show p)++(show d)++(show v)++"*"++(show l)++"*"++(show c)++"*"
+---------------------------------------------------------------------------------------------------------
+
+--DISPAROS PARA STRING
+disparosToString :: [Disparo] -> String
+disparosToString [] = []
+disparosToString [x] = disparosParaString x
+disparosToString (h:t) = disparosParaString h ++ "\n" ++ disparosToString t
+
+disparosParaString :: Disparo -> String
+disparosParaString (DisparoCanhao ind pos dir) = "K" ++ (show ind) ++ (show pos) ++ (show dir)
+disparosParaString (DisparoLaser  ind pos dir) = "L" ++ (show ind) ++ (show pos) ++ (show dir)
+disparosParaString (DisparoChoque ind tic)     = "C" ++ (show ind) ++ (show tic)
+---------------------------------------------------------------------------------------------------------
+--STRING PARA JOGADOR
+stringToJogador :: String -> [Jogador]
+stringToJogador [] = []
+stringToJogador str = let newStr = str ++ "\n"
+                      in stringToJogador_aux newStr
+
+stringToJogador_aux :: String -> [Jogador]
+stringToJogador_aux [] = []
+stringToJogador_aux str = let tuplo = span (/='\n') str
+                          in  paraJogador (fst tuplo) ++ stringToJogador_aux (tail . snd $ tuplo) --tail pq nao queremos '\n'
+
+paraJogador :: String -> [Jogador]
+paraJogador [] = []
+paraJogador str = [Jogador pos dir vidas l c]
+  where
+    pos         = read $ takeWhileInclusive (/=')') str :: Posicao
+    resto       = dropWhile (not . isLetter) str
+    dir         = read $ take 1 $ resto :: Direcao
+    vidlasechoq = separa . tail $ resto
+    vidas       = (!!) vidlasechoq 0 :: Int
+    l           = (!!) vidlasechoq 1 :: Int
+    c           = (!!) vidlasechoq 2 :: Int
+
+separa :: String -> [Int]
+separa [] = []
+separa str = valor : separa resto
+  where
+    tuplo = span (/='*') str
+    valor = read . fst $ tuplo:: Int
+    resto = tail . snd $ tuplo
+
+--STRING PARA DISPARO
+stringToDisparo :: String -> [Disparo]
+stringToDisparo [] = []
+stringToDisparo str = let newStr = str ++ "\n"
+                      in stringToDisparo_aux newStr
+
+stringToDisparo_aux :: String -> [Disparo]
+stringToDisparo_aux [] = []
+stringToDisparo_aux str = let tuplo = span (/='\n') str
+                          in  paraDisparo (fst tuplo) ++ stringToDisparo_aux (tail . snd $ tuplo) --tail pq nao queremos '\n'
+
+paraDisparo :: String -> [Disparo]
+paraDisparo [] = []
+paraDisparo str | head str == 'K' = [DisparoCanhao ind pos dir] 
+                | head str == 'L' = [DisparoLaser ind pos dir]                
+                | head str == 'C' = [DisparoChoque ind ticks]
+  where 
+    list = tail str
+    ind  = read $ take 1 list :: Int
+    pos  = read $ takeWhileInclusive (/=')') (drop 1 list)  :: Posicao
+    dir  = read $ dropWhile (not . isLetter) list :: Direcao
+
+type Str = (String,String,String)
+
+divideString :: String -> Str
+divideString [] = ([],[],[])
+divideString str = divideString_aux 0 str [] [] []
+
+divideString_aux :: Int -> String -> String -> String -> String -> Str
+divideString_aux _ [] l1 l2 l3 = (l1,l2,l3)
+divideString_aux x ('|':t) l1 l2 l3 = divideString_aux (succ x) t l1 l2 l3
+divideString_aux 0 (h:t) l1 l2 l3 = divideString_aux 0 t (l1++[h]) l2 l3
+divideString_aux 1 (h:t) l1 l2 l3 = divideString_aux 1 t l1 (l2++[h]) l3
+divideString_aux 2 (h:t) l1 l2 l3 = divideString_aux 2 t l1 l2 (l3++[h])
+
+-- * Funções principais da Tarefa 3.
+
+-- | Comprime um 'Estado' para formato textual.
+--
+-- __NB:__ A função 'show' representa um 'Estado' num formato textual facilmente legível mas extenso.
+--
+-- __NB:__ Uma boa solução deve representar o 'Estado' dado no mínimo número de caracteres possível.
+comprime :: Estado -> String
+comprime (Estado mapa jog disp) = mpToStr mapa ++ "|" ++ jogadorParaStr jog ++ "|" ++ disparosToString disp
+
+-- | Descomprime um 'Estado' no formato textual utilizado pela função 'comprime'.
+--
+-- __NB:__ A função 'comprime' é válida de for possível recuperar o 'Estado' utilizando a função 'descomprime', i.e.:
+--
+-- prop> descomprime . comprime = id
+--
+-- __NB:__ Esta propriedade é particularmente válida para a solução pré-definida:
+--
+-- prop> read . show = id
+descomprime :: String -> Estado
+descomprime str = let (mapaStr, playerStr, dispStr) = divideString str
+                  in Estado mapa player disp
+  where
+    (mapaStr, playerStr, dispStr) = divideString str
+    mapa   = if null mapaStr   then [] else toMapa mapaStr
+    player = if null playerStr then [] else stringToJogador playerStr
+    disp   = if null dispStr   then [] else stringToDisparo dispStr
+
+

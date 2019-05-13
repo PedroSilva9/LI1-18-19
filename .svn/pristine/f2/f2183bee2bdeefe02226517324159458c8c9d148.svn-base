@@ -1,0 +1,237 @@
+-- | Este módulo define funções comuns da Tarefa 4 do trabalho prático.
+module Tarefa4_2018li1g027 where
+
+import LI11819
+import TestesT3
+import TestesT4
+import Tarefa2_2018li1g027
+import Tarefa1_2018li1g027
+import Data.List
+import Data.Maybe
+
+-- * Testes
+-- | Testes unitários da Tarefa 4.
+--
+-- Cada teste é um 'Estado'.
+testesT4 :: [Estado]
+testesT4 = test ++ testest4
+
+asSqr :: PosicaoGrelha -> [Posicao]
+asSqr (a,b) = [(a,b),(a+1,b),(a,b+1),(a+1,b+1)]
+
+asTwo :: Disparo -> [Posicao]
+asTwo d = fst $ shotAsTwoBlocks (posicaoDisparo d) (direcaoDisparo d)
+
+-- * Funções principais da Tarefa 4.
+
+-- | Avança o 'Estado' do jogo um 'Tick' de tempo.
+--
+-- __NB:__ Apenas os 'Disparo's afetam o 'Estado' do jogo com o passar do tempo.
+--
+-- __NB:__ Deve chamar as funções 'tickChoques', 'tickCanhoes' e 'tickLasers' pela ordem definida.
+tick :: Estado -- ^ O 'Estado' anterior.
+     -> Estado -- ^ O 'Estado' após um 'Tick'.
+tick = tickChoques . tickCanhoes . tickLasers
+
+-- | Avança o 'Estado' do jogo um 'Tick' de tempo, considerando apenas os efeitos dos tiros de 'Laser' disparados.
+tickLasers :: Estado -> Estado
+tickLasers e = atualizaDisparosLaser $ flip verifiesTanks pathNC $ verifiesDestructable rmCanhoes path allD 
+  where
+    allLasers      = filter (\d -> case d of {DisparoLaser{} -> True; _ -> False}) $ disparosEstado e
+    tuploPosDir    = zip (map posicaoDisparo allLasers) (map direcaoDisparo allLasers)
+    tuploAsTwoPos  = map (uncurry shotAsTwoBlocks) tuploPosDir
+    allPos         = [(l,c) | l <- [0 .. pred . length . mapaEstado $ e], c <- [0 .. pred . length . head . mapaEstado $ e]]
+    allPosGroup    = groupN allPos $ length . head . mapaEstado $ e
+    (allI, allD)   = (posIndestrutivel (mapaEstado e) allPosGroup, posDestrutivel (mapaEstado e) allPosGroup)
+    (pathNC, path) = (map (flip allPosPath allI) tuploAsTwoPos, nub . concat $ pathNC)
+    rmCanhoes      = verifiesCanhoes e $ concat $ map (flip laserPath allI) tuploPosDir
+
+atualizaDisparosLaser :: Estado -> Estado
+atualizaDisparosLaser e = let newDisp = filter (\d -> case d of {DisparoLaser{} -> False; _ -> True}) $ disparosEstado e
+                          in e{disparosEstado = newDisp}
+
+verifiesCanhoes :: Estado -> [Posicao] -> Estado
+verifiesCanhoes e l = e{disparosEstado = aux (disparosEstado e) l}
+  where
+    aux :: [Disparo] -> [Posicao] -> [Disparo]
+    aux [] _ = []
+    aux (d@(DisparoCanhao _ pos _) : t) l = if elem pos l then aux t l else d : aux t l
+    aux (h:t) l = h : aux t l
+
+
+verifiesTanks :: Estado -> [[Posicao]] -> Estado
+verifiesTanks e path = e{jogadoresEstado = map (flip aux path) $ jogadoresEstado e}
+  where
+    aux :: Jogador -> [[Posicao]] -> Jogador
+    aux j [] = j
+    aux j (pos:post) = let vidas = vidasJogador j 
+                       in if (any (flip elem pos) (asSqr . posicaoJogador $ j)) && vidas > 0
+                             then aux j{vidasJogador = pred vidas} post
+                             else aux j post
+
+verifiesDestructable :: Estado -> [Posicao] -> [Posicao] -> Estado
+verifiesDestructable e path dest = e{mapaEstado = aux intersection mapa}
+  where
+    intersection = intersect path dest
+    mapa = mapaEstado e
+    aux :: [Posicao] -> Mapa -> Mapa
+    aux [] m = m
+    aux p m = foldl (\m h -> atualizaPosicaoMatriz h Vazia m) m p
+
+laserPath :: (PosicaoGrelha,Direcao) -> [Posicao] -> [PosicaoGrelha] 
+laserPath (x,C) posInd = [(l,snd x) | l <- [maxRow .. fst x]]
+  where
+    sameColumn = filter (\(a,b) -> b == snd x && a < fst x) posInd
+    maxRow = maximum $ map fst sameColumn
+laserPath (x,D) posInd = [(fst x,c) | c <- [snd x .. minColumn]]
+  where
+    sameRow = filter (\(a,b) -> a == fst x && b > snd x) posInd
+    minColumn = minimum $ map snd sameRow
+laserPath (x,B) posInd = [(l,snd x) | l <- [fst x .. minRow]]
+  where
+    sameColumn = filter (\(a,b) -> b == snd x && a > fst x) posInd
+    minRow = minimum $ map fst sameColumn
+laserPath (x,E) posInd = [(fst x,c) | c <- [maxColumn .. snd x]]
+  where
+    sameRow = filter (\(a,b) -> a == fst x && b < snd x) posInd
+    maxColumn = maximum $ map snd sameRow
+
+--para cada disparo recebe a lista de pos e a dir e recebe a posicao dos indestrutiveis e retorna o caminho entre a posicao de disparo e a peca indestrutivel mais proxima.
+allPosPath :: ([Posicao],Direcao) -> [Posicao] -> [Posicao]
+allPosPath (x:(xs:t),C) posInd = [(l,snd x) | l <- [maxRow .. fst x]] ++ [(l,snd xs) | l <- [maxRow .. fst xs]]
+  where
+    (sameColumnFst, sameColumnSnd) = (filter (\(a,b) -> b == snd x && a <= fst x) posInd, filter (\(a,b) -> b == snd xs && a <= fst x) posInd)
+    maxRow = max (maximum $ map fst sameColumnFst) (maximum $ map fst sameColumnSnd)
+allPosPath (x:(xs:t),D) posInd = [(fst x,c) | c <- [snd x .. minColumn]] ++ [(fst xs,c) | c <- [snd xs .. minColumn]]
+  where
+    (sameRowFst, sameRowSnd) = (filter (\(a,b) -> a == fst x && b >= snd x) posInd, filter (\(a,b) -> a == fst xs && b >= snd x) posInd)
+    minColumn = min (minimum $ map snd sameRowFst) (minimum $ map snd sameRowSnd)
+allPosPath (x:(xs:t),B) posInd = [(l,snd x) | l <- [fst x .. minRow]] ++ [(l,snd xs) | l <- [fst xs .. minRow]]
+  where
+    (sameColumnFst, sameColumnSnd) = (filter (\(a,b) -> b == snd x && a >= fst x) posInd, filter (\(a,b) -> b == snd xs && a >= fst x) posInd)
+    minRow = min (minimum $ map fst sameColumnFst) (minimum $ map fst sameColumnSnd)
+allPosPath (x:(xs:t),E) posInd = [(fst x,c) | c <- [maxColumn .. snd x]] ++ [(fst xs,c) | c <- [maxColumn .. snd xs]]
+  where
+    (sameRowFst, sameRowSnd) = (filter (\(a,b) -> a == fst x && b <= snd x) posInd, filter (\(a,b) -> a == fst xs && b <= snd x) posInd)
+    maxColumn = max (maximum $ map snd sameRowFst) (maximum $ map snd sameRowSnd)
+
+shotAsTwoBlocks :: PosicaoGrelha -> Direcao -> ([Posicao], Direcao)
+shotAsTwoBlocks (li,co) C = ([(li,co), (li,succ co)], C)
+shotAsTwoBlocks (li,co) B = ([(succ li, co), (succ li, succ co)], B)
+shotAsTwoBlocks (li,co) D = ([(li, succ co), (succ li, succ co)], D)
+shotAsTwoBlocks (li,co) E = ([(li,co), (succ li,co)], E)
+
+groupN :: [a] -> Int -> [[a]]
+groupN [] _ = []
+groupN l n = take n l : groupN (drop n l) n
+
+posIndestrutivel :: Mapa -> [[Posicao]] -> [Posicao]
+posIndestrutivel [] [] = []
+posIndestrutivel (x:xs) (y:ys) = aux x y ++ posIndestrutivel xs ys
+  where
+    aux :: [Peca] -> [Posicao] -> [Posicao]
+    aux [] [] = []
+    aux (x:xs) (y:ys) = if (x == Bloco Indestrutivel) then y : aux xs ys else aux xs ys
+
+posDestrutivel :: Mapa -> [[Posicao]] -> [Posicao]
+posDestrutivel [] [] = []
+posDestrutivel (x:xs) (y:ys) = aux x y ++ posDestrutivel xs ys
+  where
+    aux :: [Peca] -> [Posicao] -> [Posicao]
+    aux [] [] = []
+    aux (x:xs) (y:ys) = if (x == Bloco Destrutivel) then y : aux xs ys else aux xs ys
+
+-- | Avança o 'Estado' do jogo um 'Tick' de tempo, considerando apenas os efeitos das balas de 'Canhao' disparadas.
+
+tickCanhoes :: Estado -> Estado
+tickCanhoes est = let newEstado = verifiesDestructable e{disparosEstado = removeInd ++ resto} shotsAsTwoPos allD
+                      disps = intersect (disparosEstado newEstado) (disparosEstado e)
+                  in newEstado{disparosEstado = map avancaDisparo disps}
+  where
+    (all, resto)  = partition (\d -> case d of {DisparoCanhao{} -> True; _ -> False}) $ disparosEstado est
+    (new, e)      = (checkTanks est all, est{jogadoresEstado = jogadoresEstado new, disparosEstado = disparosEstado new})
+    tuploPosDir   = zip (map posicaoDisparo all) (map direcaoDisparo all)
+    shotsAsTwoPos = concatMap (fst . uncurry shotAsTwoBlocks) tuploPosDir
+    allPos        = [(l,c) | l <- [0 .. pred . length . mapaEstado $ e], c <- [0 .. pred . length . head . mapaEstado $ e]]
+    allPosGroup   = groupN allPos $ length . head . mapaEstado $ e
+    (allI, allD)  = (posIndestrutivel (mapaEstado e) allPosGroup, posDestrutivel (mapaEstado e) allPosGroup)
+    disparos      = removeSobrepostos (map posicaoDisparo all) $ justPassed all
+    removeDest    = removeCanhao disparos $ intersect shotsAsTwoPos allD
+    removeInd     = removeCanhao removeDest $ intersect shotsAsTwoPos allI
+
+avancaDisparo :: Disparo -> Disparo
+avancaDisparo d@(DisparoCanhao _ pos dir) = let newPos = somaVetores pos $ direcaoParaVetor dir
+                                            in d{posicaoDisparo = newPos}
+avancaDisparo d = d 
+
+checkTanks :: Estado -> [Disparo] -> Estado
+checkTanks e lDisp = e{jogadoresEstado = newJog, disparosEstado = newDisp}
+  where
+    (players,disparos) = (jogadoresEstado e, filter (\d -> case d of {DisparoCanhao{} -> False; _ -> True}) $ disparosEstado e)
+    (newJog,disp) = (atualizaJog players lDisp, atualizaDisp players lDisp)
+    newDisp = disparos ++ disp
+
+atualizaJog :: [Jogador] -> [Disparo] -> [Jogador]
+atualizaJog j d = map (flip atualizaJogAux (map asTwo d)) j
+  
+atualizaJogAux :: Jogador -> [[Posicao]] -> Jogador
+atualizaJogAux j [] = j
+atualizaJogAux j (lp:lps) = if (or intersected) && (vidasJogador j /= 0) 
+                               then atualizaJogAux (removeVidas j) lps 
+                               else atualizaJogAux j lps
+  where
+    intersected = map (flip elem lp) asTank
+    asTank = asSqr . posicaoJogador $ j
+    removeVidas :: Jogador -> Jogador
+    removeVidas j = let vidas = vidasJogador j
+                    in if vidas /= 0
+                          then j{vidasJogador = pred vidas}
+                          else j
+
+atualizaDisp :: [Jogador] -> [Disparo] -> [Disparo]
+atualizaDisp j d = mapMaybe (aux allJPos) d
+  where
+    comVida = filter (\j -> vidasJogador j /= 0) j
+    allJPos = concatMap (asSqr . posicaoJogador) comVida
+    aux :: [Posicao] -> Disparo -> Maybe Disparo
+    aux allJPos d = let dispPos = fst $ shotAsTwoBlocks (posicaoDisparo d) (direcaoDisparo d)
+                    in if any (flip elem allJPos) dispPos
+                          then Nothing
+                          else Just d
+
+--remove os canhoes que embateram com as peças
+removeCanhao :: [Disparo] -> [Posicao] -> [Disparo]
+removeCanhao lDisp l = mapMaybe (aux l) lDisp
+  where
+    aux :: [Posicao] -> Disparo -> Maybe Disparo
+    aux l d = if any (flip elem l) $ asTwo d then Nothing else Just d
+
+justPassed :: [Disparo] -> [Disparo]
+justPassed lDisps = mapMaybe (aux tuploShot) lDisps
+  where
+    oppositeDirMap = map (toEnum . flip mod 4 . (+) 2 . fromEnum . direcaoDisparo) lDisps
+    oppositePosMap = zipWith somaVetores (map posicaoDisparo lDisps) (map direcaoParaVetor oppositeDirMap)
+    tuploShot      = zip oppositePosMap oppositeDirMap
+    aux :: [(Posicao,Direcao)] -> Disparo -> Maybe Disparo
+    aux tuploOpposite disp = let tuplo = (posicaoDisparo disp, direcaoDisparo disp)
+                             in if elem tuplo tuploOpposite then Nothing else Just disp
+
+removeSobrepostos :: [PosicaoGrelha] -> [Disparo] -> [Disparo]
+removeSobrepostos allPos lDisp = mapMaybe (sameSpot allPos) lDisp
+  where
+    sameSpot :: [PosicaoGrelha] -> Disparo -> Maybe Disparo
+    sameSpot allPos disp = let dispPos = posicaoDisparo disp
+                           in if (length $ filter (==dispPos) allPos) > 1 then Nothing else Just disp
+                        
+-- | Avança o 'Estado' do jogo um 'Tick' de tempo, considerando apenas os efeitos dos campos de 'Choque' disparados.
+tickChoques :: Estado -> Estado
+tickChoques e = e{disparosEstado = nChoques ++ newTicks}
+  where
+    (choques, nChoques) = partition (\d -> case d of {DisparoChoque{} -> True; _ -> False}) $ disparosEstado e
+    newTicks            = mapMaybe atualizaTicks choques
+
+atualizaTicks :: Disparo -> Maybe Disparo
+atualizaTicks d = let tick = tempoDisparo d 
+                  in if tick == 0
+                        then Nothing
+                        else Just d{tempoDisparo = pred tick}
